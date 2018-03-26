@@ -183,12 +183,14 @@ namespace crf_loss{
 			Your Implementation here 
 		*/
 		PetscReal reg = 0.0;
-		user->objgrad_timer.start();
-		user->matvec_timer.start();			
 
-		ierr = MatMultTranspose(user->M1, w, user->w_node); CHKERRQ(ierr);
+		ierr = MatMult(user->M1, w, user->w_node); CHKERRQ(ierr);
+
+		user->objgrad_timer.start();
+		ierr = MatMult(user->data, user->w_node, user->fx); CHKERRQ(ierr);
+		user->matvec_timer.start();			
 		
-		ierr = MatMultTranspose(user->M2, w, user->w_edge); CHKERRQ(ierr);
+		ierr = MatMult(user->M2, w, user->w_edge); CHKERRQ(ierr);
 		
 		ierr = VecScatterCreateToAll(user->w_edge, &user->scatter, &user->w_edgeloc); CHKERRQ(ierr);
 		ierr = VecAssemblyBegin(user->w_edgeloc); CHKERRQ(ierr);
@@ -208,15 +210,19 @@ namespace crf_loss{
 		// Now everyone can compute the gradient
 		user->matvec_timer.start();
 		//have a vector of marginal probability in c_node
-		ierr = MatMultTranspose(user->data, user->marg, user->g_node); CHKERRQ(ierr);
+		ierr = MatMultTranspose(user->data, user->c_node, user->g_node); CHKERRQ(ierr);
 		
-//		user->g_edge  , add gradient of edge to gradient of node
-		ierr = MatMultTranspose(user->M1, user->g_node, user->g_node); CHKERRQ(ierr);
-		ierr = MatMultTranspose(user->M2, user->g_edge, user->g_edge); CHKERRQ(ierr);
+//		add gradient of edge to gradient of node
+		ierr = VecSet(G, 0.0); CHKERRQ(ierr);
+		ierr = VecDuplicate(G, G_temp); CHKERRQ(ierr);
+		ierr = VecDuplicate(G, G_temp1); CHKERRQ(ierr);
 
+		ierr = MatMultTranspose(user->M1, user->g_node, G_temp); CHKERRQ(ierr);
+		ierr = MatMultTranspose(user->M2, user->g_edge, G_temp1); CHKERRQ(ierr);
+		
 		user->matvec_timer.stop();
 
-		ierr = VecAXPY(G, user->lambda, w); CHKERRQ(ierr);
+		ierr = VecWAXPY(G,1,G_temp,G_temp1); CHKERRQ(ierr);
 
 		user->objgrad_timer.stop();
 		
