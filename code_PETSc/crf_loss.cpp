@@ -178,11 +178,47 @@ namespace crf_loss{
 		AppCtx *user = (AppCtx *)ctx;
 		PetscErrorCode ierr;
 		
-		PetscFunctionBegin;
-		
+		PetscFunctionBegin;		
 		/* 
 			Your Implementation here 
 		*/
+		PetscReal reg = 0.0;
+		user->objgrad_timer.start();
+		user->matvec_timer.start();			
+
+		ierr = MatMultTranspose(user->M1, w, user->w_node); CHKERRQ(ierr);
+		
+		ierr = MatMultTranspose(user->M2, w, user->w_edge); CHKERRQ(ierr);
+		
+		ierr = VecScatterCreateToAll(user->w_edge, &user->scatter, &user->w_edgeloc); CHKERRQ(ierr);
+		ierr = VecAssemblyBegin(user->w_edgeloc); CHKERRQ(ierr);
+		ierr = VecAssemblyEnd(user->w_edgeloc); CHKERRQ(ierr);
+
+		// Computes the function and gradient coefficients 
+		ierr = loss_coef(user->fx, user->labels, user->w_edgeloc,user->c_node, user->g_edgeloc , f , user, &user->seq);	CHKERRQ(ierr);
+
+		// Sum up the contribution of loss from all processes
+		ierr = VecScatterBegin(scatter, user->g_edgeloc, user->g_edge, ADD_VALUES, SCATTER_REVERSE); CHKERRQ(ierr);
+		ierr = VecScatterEnd(scatter, user->g_edgeloc, user->g_edge, ADD_VALUES, SCATTER_REVERSE); CHKERRQ(ierr);
+
+		// Compute the regularization
+		ierr = VecDot(w, w, &reg); CHKERRQ(ierr);
+		*f = *f + reg * user->lambda / 2.0;
+
+		// Now everyone can compute the gradient
+		user->matvec_timer.start();
+		//have a vector of marginal probability in c_node
+		ierr = MatMultTranspose(user->data, user->marg, user->g_node); CHKERRQ(ierr);
+		
+//		user->g_edge  , add gradient of edge to gradient of node
+		ierr = MatMultTranspose(user->M1, user->g_node, user->g_node); CHKERRQ(ierr);
+		ierr = MatMultTranspose(user->M2, user->g_edge, user->g_edge); CHKERRQ(ierr);
+
+		user->matvec_timer.stop();
+
+		ierr = VecAXPY(G, user->lambda, w); CHKERRQ(ierr);
+
+		user->objgrad_timer.stop();
 		
 		PetscFunctionReturn(0);
 	}
@@ -286,6 +322,37 @@ namespace crf_loss{
 		/* 
 			Your Implementation here 
 		*/
+													  
+		PetscInt lError, wError;			  
+		ierr = MatMult(user->data, w, user->fx); CHKERRQ(ierr);
+		// Get the error of word and letter for the local sub-dataset of training data
+
+		get_errors(user->fx,user->labels,user->w_edgeloc,&user->seq, user,&lError, &wError);
+		CHKERRQ(ierr);
+		
+				// Sum up the errors (both word wise and letter wise)
+		MPI_Allreduce(MPI_IN_PLACE, &lError, 1, MPIU_INT, MPI_SUM, PETSC_COMM_WORLD);
+		MPI_Allreduce(MPI_IN_PLACE, &wError, 1, MPIU_INT, MPI_SUM, PETSC_COMM_WORLD);
+
+		if (user->rank == 0)
+			PetscPrintf(PETSC_COMM_SELF, "%f %f ", 
+									lError*100.0/user->m, wError*100.0/user->seq.wGlobalCount);
+
+		// Repeat the above for test data
+		ierr = MatMult(user->tdata, w, user->tfx); CHKERRQ(ierr);
+		// Get the error of word and letter for the local sub-dataset of training data
+
+		get_errors(user->tfx,user->tlabels,user->w_edgeloc,&user->seq, user,&lError, &wError);
+		CHKERRQ(ierr);
+		
+				// Sum up the errors (both word wise and letter wise)
+		MPI_Allreduce(MPI_IN_PLACE, &lError, 1, MPIU_INT, MPI_SUM, PETSC_COMM_WORLD);
+		MPI_Allreduce(MPI_IN_PLACE, &wError, 1, MPIU_INT, MPI_SUM, PETSC_COMM_WORLD);
+
+		if (user->rank == 0)
+			PetscPrintf(PETSC_COMM_SELF, "%f %f ", 
+									lError*100.0/user->m, wError*100.0/user->seq.wGlobalCount);
+
 		
 		PetscFunctionReturn(0);		
 	}
