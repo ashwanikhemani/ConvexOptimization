@@ -178,12 +178,30 @@ namespace crf_loss{
 		AppCtx *user = (AppCtx *)ctx;
 		PetscErrorCode ierr;
 		Vec G_temp , G_temp1;
+		PetscInt nClass,ndim,j,k;
 		
 		PetscFunctionBegin;		
 		/* 
 			Your Implementation here 
 		*/
 		PetscReal reg = 0.0;
+		PetscScalar one = 1.0;
+		nClass=user->nclasses;
+		ndim=user->dim;
+		
+		for (j = 0; j < nClass; j++)  
+		  	for (k = 0; k < ndim; k++)
+				if(j==k)
+					MatSetValue(user->M1,j,k,one,INSERT_VALUES);
+		for (j = 0; j < nClass; j++)  
+			for (k = ndim; k < (nClass+ndim)*nClass; k++)
+		  		if(j==k)
+					MatSetValue(user->M2,j,k,one,INSERT_VALUES);
+
+		MatAssemblyBegin(user->M1,MAT_FINAL_ASSEMBLY);
+		MatAssemblyEnd(user->M1,MAT_FINAL_ASSEMBLY);
+		MatAssemblyBegin(user->M2,MAT_FINAL_ASSEMBLY);
+		MatAssemblyEnd(user->M2,MAT_FINAL_ASSEMBLY);
 
 		ierr = MatMult(user->M1, w, user->w_node); CHKERRQ(ierr);
 
