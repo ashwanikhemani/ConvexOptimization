@@ -177,6 +177,7 @@ namespace crf_loss{
 	PetscErrorCode LossGrad(Tao tao, Vec w, double *f, Vec G, void *ctx) {
 		AppCtx *user = (AppCtx *)ctx;
 		PetscErrorCode ierr;
+		Vec G_temp , G_temp1;
 		
 		PetscFunctionBegin;		
 		/* 
@@ -200,8 +201,8 @@ namespace crf_loss{
 		ierr = loss_coef(user->fx, user->labels, user->w_edgeloc,user->c_node, user->g_edgeloc , f , user, &user->seq);	CHKERRQ(ierr);
 
 		// Sum up the contribution of loss from all processes
-		ierr = VecScatterBegin(scatter, user->g_edgeloc, user->g_edge, ADD_VALUES, SCATTER_REVERSE); CHKERRQ(ierr);
-		ierr = VecScatterEnd(scatter, user->g_edgeloc, user->g_edge, ADD_VALUES, SCATTER_REVERSE); CHKERRQ(ierr);
+		ierr = VecScatterBegin(user->scatter, user->g_edgeloc, user->g_edge, ADD_VALUES, SCATTER_REVERSE); CHKERRQ(ierr);
+		ierr = VecScatterEnd(user->scatter, user->g_edgeloc, user->g_edge, ADD_VALUES, SCATTER_REVERSE); CHKERRQ(ierr);
 
 		// Compute the regularization
 		ierr = VecDot(w, w, &reg); CHKERRQ(ierr);
@@ -214,8 +215,8 @@ namespace crf_loss{
 		
 //		add gradient of edge to gradient of node
 		ierr = VecSet(G, 0.0); CHKERRQ(ierr);
-		ierr = VecDuplicate(G, G_temp); CHKERRQ(ierr);
-		ierr = VecDuplicate(G, G_temp1); CHKERRQ(ierr);
+		ierr = VecDuplicate(G, &G_temp); CHKERRQ(ierr);
+		ierr = VecDuplicate(G, &G_temp1); CHKERRQ(ierr);
 
 		ierr = MatMultTranspose(user->M1, user->g_node, G_temp); CHKERRQ(ierr);
 		ierr = MatMultTranspose(user->M2, user->g_edge, G_temp1); CHKERRQ(ierr);
@@ -329,8 +330,10 @@ namespace crf_loss{
 			Your Implementation here 
 		*/
 													  
-		PetscInt lError, wError;			  
-		ierr = MatMult(user->data, w, user->fx); CHKERRQ(ierr);
+		PetscInt lError, wError;	
+		ierr = MatMult(user->M1, w, user->w_node); CHKERRQ(ierr);
+		
+		ierr = MatMult(user->data, user->w_node, user->fx); CHKERRQ(ierr);
 		// Get the error of word and letter for the local sub-dataset of training data
 
 		get_errors(user->fx,user->labels,user->w_edgeloc,&user->seq, user,&lError, &wError);
@@ -345,7 +348,9 @@ namespace crf_loss{
 									lError*100.0/user->m, wError*100.0/user->seq.wGlobalCount);
 
 		// Repeat the above for test data
-		ierr = MatMult(user->tdata, w, user->tfx); CHKERRQ(ierr);
+		
+		ierr = MatMult(user->tdata, user->w_node, user->tfx); CHKERRQ(ierr);
+
 		// Get the error of word and letter for the local sub-dataset of training data
 
 		get_errors(user->tfx,user->tlabels,user->w_edgeloc,&user->seq, user,&lError, &wError);
