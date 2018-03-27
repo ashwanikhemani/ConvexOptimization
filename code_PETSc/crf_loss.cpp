@@ -184,34 +184,37 @@ namespace crf_loss{
 		/* 
 			Your Implementation here 
 		*/
-		PetscReal reg = 0.0;
-		PetscScalar one = 1.0;
-		nClass=user->nclasses;
-		ndim=user->dim;
+//		keep this safe because we will need it for later
+//		PetscReal reg = 0.0;
+//		PetscScalar one = 1.0;
+//		nClass=user->nclasses;
+//		ndim=user->dim;
 		
-		for (j = 0; j < nClass; j++)  
-		  	for (k = 0; k < ndim; k++)
-				if(j==k)
-					MatSetValue(user->M1,j,k,one,INSERT_VALUES);
-		for (j = 0; j < nClass; j++)  
-			for (k = ndim; k < (nClass+ndim)*nClass; k++)
-		  		if(j==k)
-					MatSetValue(user->M2,j,k,one,INSERT_VALUES);
+		//assemble M1, M2
+		Vec x, y_w, y_t;
+		PetscInt len_x, len_y_w, len_y_t = 129*26 + 26*26, 129*26, 26*26;
+		ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, len_x, &x); CHKERRQ(ierr);
+		ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, len_y_w, &y_w); CHKERRQ(ierr);
+		ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, len_y_t, &y_t); CHKERRQ(ierr);
+		ierr = VecSet(x, 1); CHKERRQ(ierr);
+		ierr = VecSet(y_w, 1); CHKERRQ(ierr);
+		ierr = VecSet(y_t, 1); CHKERRQ(ierr);
 
-		MatAssemblyBegin(user->M1,MAT_FINAL_ASSEMBLY);
-		MatAssemblyEnd(user->M1,MAT_FINAL_ASSEMBLY);
-		MatAssemblyBegin(user->M2,MAT_FINAL_ASSEMBLY);
-		MatAssemblyEnd(user->M2,MAT_FINAL_ASSEMBLY);
+		ierr = make_sparse_matrix(user->M1, x, y_w, 0);CHKERRQ(ierr);
+		ierr = make_sparse_matrix(user->M2, x, y_t, 129*26);CHKERRQ(ierr);
 
+
+		//extract node and edge weights using M1, M2
 		ierr = MatMult(user->M1, w, user->w_node); CHKERRQ(ierr);
-
-		user->objgrad_timer.start();
-		ierr = MatMult(user->data, user->w_node, user->fx); CHKERRQ(ierr);
-		user->matvec_timer.start();			
-		
 		ierr = MatMult(user->M2, w, user->w_edge); CHKERRQ(ierr);
+
+		//compute dot products
+		ierr = MatMult(user->data, user->w_node, user->fx); CHKERRQ(ierr);
 		
+		
+		//scatter T
 		ierr = VecScatterCreateToAll(user->w_edge, &user->scatter, &user->w_edgeloc); CHKERRQ(ierr);
+		//why Assembly?
 		ierr = VecAssemblyBegin(user->w_edgeloc); CHKERRQ(ierr);
 		ierr = VecAssemblyEnd(user->w_edgeloc); CHKERRQ(ierr);
 
@@ -499,4 +502,94 @@ namespace crf_loss{
 		
 		PetscFunctionReturn(0);
 	}
+}
+
+PetscErrorCode make_sparse_matrix(Mat *M, Vec &x, Vec &y, PetscInt col_start) {
+	PetscFunctionBegin;
+
+	PetscInt sz_local_x, sz_local_y, sz_x, sz_y;
+	PetscInt *diag_nnz, *offdiag_nnz;
+	PetscInt cbegin, cend, rbegin, rend;
+
+	// sz_local_x is the local length of x in my process
+	ierr = VecGetLocalSize(x, &sz_local_x);	CHKERRQ(ierr);
+	ierr = VecGetLocalSize(y, &sz_local_y);	CHKERRQ(ierr);
+
+	// sz_x is the global total length of x
+	ierr = VecGetSize(x, &sz_x);	CHKERRQ(ierr); 
+	ierr = VecGetSize(y, &sz_y);	CHKERRQ(ierr);	
+
+	if (col_start + sz_y > sz_x)	// all rows must get a single 1
+		SETERRQ(PETSC_COMM_SELF, 1, "offset too big!");
+
+	// See detailed explanation of printing functions at:
+	// http://www.mcs.anl.gov/petsc/petsc-current/src/sys/examples/tutorials/ex2.c.html
+	ierr = PetscSynchronizedPrintf(PETSC_COMM_WORLD, 
+											"rank = %D, sz_local_x = %D, sz_local_y = %D, sz_y = %D\n",
+											rank, sz_local_x, sz_local_y); CHKERRQ(ierr);
+	ierr = PetscSynchronizedFlush(PETSC_COMM_WORLD, PETSC_STDOUT); CHKERRQ(ierr);
+
+	ierr = MatCreate(PETSC_COMM_WORLD, M); CHKERRQ(ierr);
+	// Create a matrix, with local #row = sz_local_y, and local #column = sz_local_x
+	// The global total #row/#column is left to PETSc to determine (just sum them up)
+	ierr = MatSetSizes(*M, sz_local_y, sz_local_x, PETSC_DETERMINE, PETSC_DETERMINE); CHKERRQ(ierr);
+	ierr = MatSetType(*M, MATMPIAIJ); CHKERRQ(ierr);
+	
+	ierr = PetscMalloc(sz_local_y*sizeof(PetscInt), &diag_nnz); CHKERRQ(ierr);
+	ierr = PetscMalloc(sz_local_y*sizeof(PetscInt), &offdiag_nnz); CHKERRQ(ierr);
+
+	// Now we compute the local row and column index range of M 
+	//	(the index values are in the global sense).
+	// This is achieved by using the number of local rows/columns in each process.
+	// MPI_Exscan computes the partial sum of sz_local_x over all processes
+	// For process "rank", cbegin is the sum of sz_local_x of processes 0, ..., rank-1	
+	MPI_Exscan(&sz_local_x, &cbegin, 1, MPIU_INT, MPI_SUM, PETSC_COMM_WORLD);
+	MPI_Exscan(&sz_local_y, &rbegin, 1, MPIU_INT, MPI_SUM, PETSC_COMM_WORLD);
+	if (rank == 0)  {	// partial sum is undefined for process 0, so set it manually
+		cbegin = rbegin = 0;
+	}		
+	cend = cbegin + sz_local_x;
+	rend = rbegin + sz_local_y;
+
+	// Now for each row, set up the number of nonzero elements in the (non) diagonal block 
+	// See PETSc manual page 61.
+	for (PetscInt i = 0; i < sz_local_y; i++)		// enumerate all local rows
+	{
+		// translate to the global row number
+		PetscInt row = rbegin + i;			
+		// add col_start to compute the column ID of the element
+		PetscInt col = row + col_start;	
+
+		if (col >= cbegin && col < cend)  {		// if the column belongs to the diagonal block
+			diag_nnz[i] = 1;
+			offdiag_nnz[i] = 0;
+		}
+		else {		// if the column does not belong to the diagonal block
+			diag_nnz[i] = 0;
+			offdiag_nnz[i] = 1;
+		}
+	}
+
+	// Allocate memory for the sparse matrix
+	ierr = MatMPIAIJSetPreallocation(*M, 0, diag_nnz, 0, offdiag_nnz); CHKERRQ(ierr);
+
+	// put 1 at all nonzero entries
+	for (PetscInt i = 0; i < sz_local_y; i++)	{
+		PetscInt row = rbegin + i;
+		PetscInt col = row + col_start;
+		PetscReal val = 1.0;
+  	ierr = MatSetValues(*M, 1, &row, 1, &col, &val, INSERT_VALUES); CHKERRQ(ierr);
+	}
+
+	// assemble the entry values
+	ierr = MatAssemblyBegin(*M, MAT_FINAL_ASSEMBLY); CHKERRQ(ierr);
+	ierr = MatAssemblyEnd(*M, MAT_FINAL_ASSEMBLY); CHKERRQ(ierr);
+
+	ierr = PetscFree(diag_nnz); CHKERRQ(ierr);	// delete auxilliary arrays
+	ierr = PetscFree(offdiag_nnz); CHKERRQ(ierr);
+
+	// Print the matrix
+	ierr = PetscPrintf(PETSC_COMM_WORLD, "Let's see the matrix\n"); CHKERRQ(ierr);
+	ierr = MatView(*M, PETSC_VIEWER_STDOUT_WORLD); CHKERRQ(ierr);
+	PetscFunctionReturn(0);
 }
