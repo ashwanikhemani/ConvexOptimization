@@ -20,7 +20,7 @@ namespace crf_loss{
                            Vec 	&labels,      
                            Vec 	&w_edgeloc,                      
                            Vec 	&c_node, 
-													 Vec 	&g_edgeloc,
+			 Vec 	&g_edgeloc,
                            PetscReal 	*loss,
                            AppCtx     *user,
                            SeqCtx			*seq)  {
@@ -175,35 +175,15 @@ namespace crf_loss{
 	// 	 G 			- vector containing the newly evaluated gradient
 	// 	 f 			- function value
 	PetscErrorCode LossGrad(Tao tao, Vec w, double *f, Vec G, void *ctx) {
+
 		AppCtx *user = (AppCtx *)ctx;
 		PetscErrorCode ierr;
-		Vec G_temp , G_temp1;
-		PetscInt nClass,ndim,j,k;
+		PetscReal w_reg = 0.0;
+		PetscReal t_reg = 0.0;
 		
-		PetscFunctionBegin;		
-		/* 
-			Your Implementation here 
-		*/
-//		keep this safe because we will need it for later
-//		PetscReal reg = 0.0;
-//		PetscScalar one = 1.0;
-//		nClass=user->nclasses;
-//		ndim=user->dim;
+		PetscFunctionBegin;
+  		user->objgrad_timer.start();
 		
-		//assemble M1, M2
-		Vec x, y_w, y_t;
-		PetscInt len_x, len_y_w, len_y_t = 129*26 + 26*26, 129*26, 26*26;
-		ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, len_x, &x); CHKERRQ(ierr);
-		ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, len_y_w, &y_w); CHKERRQ(ierr);
-		ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, len_y_t, &y_t); CHKERRQ(ierr);
-		ierr = VecSet(x, 1); CHKERRQ(ierr);
-		ierr = VecSet(y_w, 1); CHKERRQ(ierr);
-		ierr = VecSet(y_t, 1); CHKERRQ(ierr);
-
-		ierr = make_sparse_matrix(user->M1, x, y_w, 0);CHKERRQ(ierr);
-		ierr = make_sparse_matrix(user->M2, x, y_t, 129*26);CHKERRQ(ierr);
-
-
 		//extract node and edge weights using M1, M2
 		ierr = MatMult(user->M1, w, user->w_node); CHKERRQ(ierr);
 		ierr = MatMult(user->M2, w, user->w_edge); CHKERRQ(ierr);
@@ -211,43 +191,39 @@ namespace crf_loss{
 		//compute dot products
 		ierr = MatMult(user->data, user->w_node, user->fx); CHKERRQ(ierr);
 		
-		
-		//scatter T
-		ierr = VecScatterCreateToAll(user->w_edge, &user->scatter, &user->w_edgeloc); CHKERRQ(ierr);
-		//why Assembly?
-		ierr = VecAssemblyBegin(user->w_edgeloc); CHKERRQ(ierr);
-		ierr = VecAssemblyEnd(user->w_edgeloc); CHKERRQ(ierr);
+		//scatter w_edge
+		ierr = VecScatterCreateToAll(user->w_edge, &(user->scatter), &(user->w_edgeloc)); CHKERRQ(ierr);
+		ierr = VecScatterBegin(user->scatter, user->w_edge, user->w_edgeloc, INSERT_VALUES, SCATTER_FORWARD); CHKERRQ(ierr);
+		ierr = VecScatterEnd(user->scatter, user->w_edge, user->w_edgeloc, INSERT_VALUES, SCATTER_FORWARD); CHKERRQ(ierr);
 
-		// Computes the function and gradient coefficients 
-		ierr = loss_coef(user->fx, user->labels, user->w_edgeloc,user->c_node, user->g_edgeloc , f , user, &user->seq);	CHKERRQ(ierr);
+		//run marginal inference
+		ierr = loss_coef(user->fx, user->labels, user->w_edgeloc, user->c_node, user->g_edgeloc, f, user, &user->seq);
+		CHKERRQ(ierr);
 
 		// Sum up the contribution of loss from all processes
+		MPI_Allreduce(MPI_IN_PLACE, f, 1, MPI_DOUBLE, MPI_SUM, PETSC_COMM_WORLD);
+
+		// Compute the regularization
+		ierr = VecDot(user->w_node, user->w_node, &w_reg); CHKERRQ(ierr);
+		ierr = VecDot(user->w_edge, user->w_edge, &t_reg); CHKERRQ(ierr);
+		*f = *f + (w_reg * user->lambda / 2.0) + (t_reg * user->lambda / 2.0);
+
+		//compute the gradient
+		ierr = MatMultTranspose(user->data, user->c_node, user->g_node); CHKERRQ(ierr);
+
+		//gather all proccess' contribution to g_edge
 		ierr = VecScatterBegin(user->scatter, user->g_edgeloc, user->g_edge, ADD_VALUES, SCATTER_REVERSE); CHKERRQ(ierr);
 		ierr = VecScatterEnd(user->scatter, user->g_edgeloc, user->g_edge, ADD_VALUES, SCATTER_REVERSE); CHKERRQ(ierr);
 
-		// Compute the regularization
-		ierr = VecDot(w, w, &reg); CHKERRQ(ierr);
-		*f = *f + reg * user->lambda / 2.0;
+		//now assemble G
+		ierr = MatMultTranspose(user->M1, user->g_node, G); CHKERRQ(ierr);
+		ierr = MatMultTransposeAdd(user->M2, user->g_edge, G, G); CHKERRQ(ierr);
 
-		// Now everyone can compute the gradient
-		user->matvec_timer.start();
-		//have a vector of marginal probability in c_node
-		ierr = MatMultTranspose(user->data, user->c_node, user->g_node); CHKERRQ(ierr);
-		
-//		add gradient of edge to gradient of node
-		ierr = VecSet(G, 0.0); CHKERRQ(ierr);
-		ierr = VecDuplicate(G, &G_temp); CHKERRQ(ierr);
-		ierr = VecDuplicate(G, &G_temp1); CHKERRQ(ierr);
+		//and do a final step to compute gradient
+		ierr = VecAXPY(G, user->lambda, w); CHKERRQ(ierr);
 
-		ierr = MatMultTranspose(user->M1, user->g_node, G_temp); CHKERRQ(ierr);
-		ierr = MatMultTranspose(user->M2, user->g_edge, G_temp1); CHKERRQ(ierr);
-		
-		user->matvec_timer.stop();
-
-		ierr = VecWAXPY(G,1,G_temp,G_temp1); CHKERRQ(ierr);
 
 		user->objgrad_timer.stop();
-		
 		PetscFunctionReturn(0);
 	}
 
@@ -264,7 +240,8 @@ namespace crf_loss{
   // 	 lError: 		the letter-wise error rate
   // 	 wError: 		the word-wise error rate
 	PetscErrorCode get_errors(Vec &fx, Vec &labels, Vec &w_edgeloc, SeqCtx *seq, 
-													  AppCtx* user, PetscInt *lError, PetscInt *wError)	{
+				AppCtx* user, PetscInt *lError, PetscInt *wError)	{
+
 		PetscErrorCode    ierr;
 		PetscReal *fx_array, *labels_array, *w_edge_array, *buf;
 		PetscInt i, j, k, idx, nClass = user->nclasses;
@@ -350,41 +327,6 @@ namespace crf_loss{
 		/* 
 			Your Implementation here 
 		*/
-													  
-		PetscInt lError, wError;	
-		ierr = MatMult(user->M1, w, user->w_node); CHKERRQ(ierr);
-		
-		ierr = MatMult(user->data, user->w_node, user->fx); CHKERRQ(ierr);
-		// Get the error of word and letter for the local sub-dataset of training data
-
-		get_errors(user->fx,user->labels,user->w_edgeloc,&user->seq, user,&lError, &wError);
-		CHKERRQ(ierr);
-		
-				// Sum up the errors (both word wise and letter wise)
-		MPI_Allreduce(MPI_IN_PLACE, &lError, 1, MPIU_INT, MPI_SUM, PETSC_COMM_WORLD);
-		MPI_Allreduce(MPI_IN_PLACE, &wError, 1, MPIU_INT, MPI_SUM, PETSC_COMM_WORLD);
-
-		if (user->rank == 0)
-			PetscPrintf(PETSC_COMM_SELF, "%f %f ", 
-									lError*100.0/user->m, wError*100.0/user->seq.wGlobalCount);
-
-		// Repeat the above for test data
-		
-		ierr = MatMult(user->tdata, user->w_node, user->tfx); CHKERRQ(ierr);
-
-		// Get the error of word and letter for the local sub-dataset of training data
-
-		get_errors(user->tfx,user->tlabels,user->w_edgeloc,&user->seq, user,&lError, &wError);
-		CHKERRQ(ierr);
-		
-				// Sum up the errors (both word wise and letter wise)
-		MPI_Allreduce(MPI_IN_PLACE, &lError, 1, MPIU_INT, MPI_SUM, PETSC_COMM_WORLD);
-		MPI_Allreduce(MPI_IN_PLACE, &wError, 1, MPIU_INT, MPI_SUM, PETSC_COMM_WORLD);
-
-		if (user->rank == 0)
-			PetscPrintf(PETSC_COMM_SELF, "%f %f ", 
-									lError*100.0/user->m, wError*100.0/user->seq.wGlobalCount);
-
 		
 		PetscFunctionReturn(0);		
 	}
@@ -457,7 +399,8 @@ namespace crf_loss{
 		ierr = MatGetLocalSize(user->tdata, &tm_local, &dim_local); CHKERRQ(ierr);
 
 		ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, 
-												(nclasses+user->dim)*nclasses, w); CHKERRQ(ierr);
+				(nclasses+user->dim)*nclasses, w); CHKERRQ(ierr);
+
 		ierr = VecSetFromOptions(*w); CHKERRQ(ierr);
 
 		ierr = VecCreateMPI(PETSC_COMM_WORLD, m_local, PETSC_DETERMINE, &user->fx); CHKERRQ(ierr);
@@ -471,7 +414,8 @@ namespace crf_loss{
 		ierr = VecSetFromOptions(user->w_node); CHKERRQ(ierr);
 
 		ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE,
-												nclasses * nclasses, &user->w_edge); CHKERRQ(ierr);
+				nclasses * nclasses, &user->w_edge); CHKERRQ(ierr);
+
 		ierr = VecSetFromOptions(user->w_edge); CHKERRQ(ierr);
 
 		ierr = VecDuplicate(user->w_node, &user->g_node); CHKERRQ(ierr);
@@ -502,94 +446,4 @@ namespace crf_loss{
 		
 		PetscFunctionReturn(0);
 	}
-}
-
-PetscErrorCode make_sparse_matrix(Mat *M, Vec &x, Vec &y, PetscInt col_start) {
-	PetscFunctionBegin;
-
-	PetscInt sz_local_x, sz_local_y, sz_x, sz_y;
-	PetscInt *diag_nnz, *offdiag_nnz;
-	PetscInt cbegin, cend, rbegin, rend;
-
-	// sz_local_x is the local length of x in my process
-	ierr = VecGetLocalSize(x, &sz_local_x);	CHKERRQ(ierr);
-	ierr = VecGetLocalSize(y, &sz_local_y);	CHKERRQ(ierr);
-
-	// sz_x is the global total length of x
-	ierr = VecGetSize(x, &sz_x);	CHKERRQ(ierr); 
-	ierr = VecGetSize(y, &sz_y);	CHKERRQ(ierr);	
-
-	if (col_start + sz_y > sz_x)	// all rows must get a single 1
-		SETERRQ(PETSC_COMM_SELF, 1, "offset too big!");
-
-	// See detailed explanation of printing functions at:
-	// http://www.mcs.anl.gov/petsc/petsc-current/src/sys/examples/tutorials/ex2.c.html
-	ierr = PetscSynchronizedPrintf(PETSC_COMM_WORLD, 
-											"rank = %D, sz_local_x = %D, sz_local_y = %D, sz_y = %D\n",
-											rank, sz_local_x, sz_local_y); CHKERRQ(ierr);
-	ierr = PetscSynchronizedFlush(PETSC_COMM_WORLD, PETSC_STDOUT); CHKERRQ(ierr);
-
-	ierr = MatCreate(PETSC_COMM_WORLD, M); CHKERRQ(ierr);
-	// Create a matrix, with local #row = sz_local_y, and local #column = sz_local_x
-	// The global total #row/#column is left to PETSc to determine (just sum them up)
-	ierr = MatSetSizes(*M, sz_local_y, sz_local_x, PETSC_DETERMINE, PETSC_DETERMINE); CHKERRQ(ierr);
-	ierr = MatSetType(*M, MATMPIAIJ); CHKERRQ(ierr);
-	
-	ierr = PetscMalloc(sz_local_y*sizeof(PetscInt), &diag_nnz); CHKERRQ(ierr);
-	ierr = PetscMalloc(sz_local_y*sizeof(PetscInt), &offdiag_nnz); CHKERRQ(ierr);
-
-	// Now we compute the local row and column index range of M 
-	//	(the index values are in the global sense).
-	// This is achieved by using the number of local rows/columns in each process.
-	// MPI_Exscan computes the partial sum of sz_local_x over all processes
-	// For process "rank", cbegin is the sum of sz_local_x of processes 0, ..., rank-1	
-	MPI_Exscan(&sz_local_x, &cbegin, 1, MPIU_INT, MPI_SUM, PETSC_COMM_WORLD);
-	MPI_Exscan(&sz_local_y, &rbegin, 1, MPIU_INT, MPI_SUM, PETSC_COMM_WORLD);
-	if (rank == 0)  {	// partial sum is undefined for process 0, so set it manually
-		cbegin = rbegin = 0;
-	}		
-	cend = cbegin + sz_local_x;
-	rend = rbegin + sz_local_y;
-
-	// Now for each row, set up the number of nonzero elements in the (non) diagonal block 
-	// See PETSc manual page 61.
-	for (PetscInt i = 0; i < sz_local_y; i++)		// enumerate all local rows
-	{
-		// translate to the global row number
-		PetscInt row = rbegin + i;			
-		// add col_start to compute the column ID of the element
-		PetscInt col = row + col_start;	
-
-		if (col >= cbegin && col < cend)  {		// if the column belongs to the diagonal block
-			diag_nnz[i] = 1;
-			offdiag_nnz[i] = 0;
-		}
-		else {		// if the column does not belong to the diagonal block
-			diag_nnz[i] = 0;
-			offdiag_nnz[i] = 1;
-		}
-	}
-
-	// Allocate memory for the sparse matrix
-	ierr = MatMPIAIJSetPreallocation(*M, 0, diag_nnz, 0, offdiag_nnz); CHKERRQ(ierr);
-
-	// put 1 at all nonzero entries
-	for (PetscInt i = 0; i < sz_local_y; i++)	{
-		PetscInt row = rbegin + i;
-		PetscInt col = row + col_start;
-		PetscReal val = 1.0;
-  	ierr = MatSetValues(*M, 1, &row, 1, &col, &val, INSERT_VALUES); CHKERRQ(ierr);
-	}
-
-	// assemble the entry values
-	ierr = MatAssemblyBegin(*M, MAT_FINAL_ASSEMBLY); CHKERRQ(ierr);
-	ierr = MatAssemblyEnd(*M, MAT_FINAL_ASSEMBLY); CHKERRQ(ierr);
-
-	ierr = PetscFree(diag_nnz); CHKERRQ(ierr);	// delete auxilliary arrays
-	ierr = PetscFree(offdiag_nnz); CHKERRQ(ierr);
-
-	// Print the matrix
-	ierr = PetscPrintf(PETSC_COMM_WORLD, "Let's see the matrix\n"); CHKERRQ(ierr);
-	ierr = MatView(*M, PETSC_VIEWER_STDOUT_WORLD); CHKERRQ(ierr);
-	PetscFunctionReturn(0);
 }
