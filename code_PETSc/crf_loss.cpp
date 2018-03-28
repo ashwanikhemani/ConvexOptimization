@@ -190,18 +190,13 @@ namespace crf_loss{
 		//compute dot products
 		ierr = MatMult(user->data, user->w_node, user->fx); CHKERRQ(ierr);
 		
-		//scatter w_edge
-		ierr = VecScatterCreateToAll(user->w_edge, &(user->scatter), &(user->w_edgeloc)); CHKERRQ(ierr);
-		ierr = VecScatterBegin(user->scatter, user->w_edge, user->w_edgeloc, INSERT_VALUES, SCATTER_FORWARD); CHKERRQ(ierr);
-		ierr = VecScatterEnd(user->scatter, user->w_edge, user->w_edgeloc, INSERT_VALUES, SCATTER_FORWARD); CHKERRQ(ierr);
-
 		//run marginal inference
 		ierr = loss_coef(user->fx, user->labels, user->w_edgeloc, user->c_node, user->g_edgeloc, f, user, &user->seq);
 		CHKERRQ(ierr);
 
 		// Sum up the contribution of loss from all processes
 		MPI_Allreduce(MPI_IN_PLACE, f, 1, MPI_DOUBLE, MPI_SUM, PETSC_COMM_WORLD);
-		//
+
 		// Compute the regularization
 		ierr = VecDot(w, w, &reg); CHKERRQ(ierr);
 		*f = *f + reg * user->lambda / 2.0;
