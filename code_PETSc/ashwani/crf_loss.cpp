@@ -24,7 +24,7 @@ namespace crf_loss{
                            PetscReal 	*loss,
                            AppCtx     *user,
                            SeqCtx			*seq)  {
-		PetscErrorCode ierr;
+	PetscErrorCode ierr;
     PetscInt i, j, k, letter_sofar, nClass, nextLabel, curLabel;
     PetscReal *label, maxTemp, denom;
 		PetscReal *buf;
@@ -177,15 +177,12 @@ namespace crf_loss{
 	PetscErrorCode LossGrad(Tao tao, Vec w, double *f, Vec G, void *ctx) {
 		AppCtx *user = (AppCtx *)ctx;
 		PetscErrorCode ierr;
-		Vec G_temp , G_temp1;
 		
 		PetscFunctionBegin;		
 		/* 
 			Your Implementation here 
 		*/
 		PetscReal reg = 0.0;
-		PetscScalar zero = 0.0;
-		PetscScalar one = 1.0;
 
 		ierr = MatMult(user->M1, w, user->w_node); CHKERRQ(ierr);
 
@@ -197,14 +194,13 @@ namespace crf_loss{
 		
 		// Computes the function and gradient coefficients 
 		ierr = loss_coef(user->fx, user->labels, user->w_edgeloc,user->c_node, user->g_edgeloc , f , user, &user->seq);	CHKERRQ(ierr);
-
-		//scatter wedgeloc back to global wedge
-		ierr = VecScatterBegin(user->scatter, user->w_edgeloc, user->w_edge, ADD_VALUES, SCATTER_REVERSE); CHKERRQ(ierr);
-		ierr = VecScatterEnd(user->scatter, user->w_edgeloc, user->w_edge, ADD_VALUES, SCATTER_REVERSE); CHKERRQ(ierr);
+		
+		// Sum up the contribution of loss from all processes
+		MPI_Allreduce(MPI_IN_PLACE, f, 1, MPI_DOUBLE, MPI_SUM, PETSC_COMM_WORLD);
 
 		// Print the vector w
 		ierr = PetscPrintf(PETSC_COMM_WORLD, "Let's see the new w_edge vector\n"); CHKERRQ(ierr);
-		ierr = VecView(user->w_edge, PETSC_VIEWER_STDOUT_WORLD); CHKERRQ(ierr);
+		ierr = VecView(w, PETSC_VIEWER_STDOUT_WORLD); CHKERRQ(ierr);
 
 		// Compute the regularization
 		ierr = VecDot(w, w, &reg); CHKERRQ(ierr);
@@ -219,21 +215,14 @@ namespace crf_loss{
 		ierr = VecScatterBegin(user->scatter, user->g_edgeloc, user->g_edge, ADD_VALUES, SCATTER_REVERSE); CHKERRQ(ierr);
 		ierr = VecScatterEnd(user->scatter, user->g_edgeloc, user->g_edge, ADD_VALUES, SCATTER_REVERSE); CHKERRQ(ierr);
 
-		// Print the vector g_edge
-		ierr = PetscPrintf(PETSC_COMM_WORLD, "Let's see the new  g_edge vector\n"); CHKERRQ(ierr);
-		ierr = VecView(user->g_edge, PETSC_VIEWER_STDOUT_WORLD); CHKERRQ(ierr);
-		
 //		add gradient of edge to gradient of node
-		ierr = VecSet(G, zero); CHKERRQ(ierr);
-		ierr = VecDuplicate(G, &G_temp); CHKERRQ(ierr);
-		ierr = VecDuplicate(G, &G_temp1); CHKERRQ(ierr);
 
-		ierr = MatMultTranspose(user->M1, user->g_node, G_temp); CHKERRQ(ierr);
-		ierr = MatMultTranspose(user->M2, user->g_edge, G_temp1); CHKERRQ(ierr);
+		ierr = MatMultTranspose(user->M1, user->g_node, G); CHKERRQ(ierr);
+		ierr = MatMultTransposeAdd(user->M2, user->g_edge, G , G ); CHKERRQ(ierr);
 		
 		user->matvec_timer.stop();
 
-		ierr = VecWAXPY(G,one,G_temp,G_temp1); CHKERRQ(ierr);
+		ierr = VecAXPY(G,user->lambda , w ); CHKERRQ(ierr);
 
 		user->objgrad_timer.stop();
 		
