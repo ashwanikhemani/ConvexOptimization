@@ -178,8 +178,7 @@ namespace crf_loss{
 
 		AppCtx *user = (AppCtx *)ctx;
 		PetscErrorCode ierr;
-		PetscReal w_reg = 0.0;
-		PetscReal t_reg = 0.0;
+		PetscReal reg = 0.0;
 		
 		PetscFunctionBegin;
   		user->objgrad_timer.start();
@@ -202,11 +201,10 @@ namespace crf_loss{
 
 		// Sum up the contribution of loss from all processes
 		MPI_Allreduce(MPI_IN_PLACE, f, 1, MPI_DOUBLE, MPI_SUM, PETSC_COMM_WORLD);
-
+		//
 		// Compute the regularization
-		ierr = VecDot(user->w_node, user->w_node, &w_reg); CHKERRQ(ierr);
-		ierr = VecDot(user->w_edge, user->w_edge, &t_reg); CHKERRQ(ierr);
-		*f = *f + (w_reg * user->lambda / 2.0) + (t_reg * user->lambda / 2.0);
+		ierr = VecDot(w, w, &reg); CHKERRQ(ierr);
+		*f = *f + reg * user->lambda / 2.0;
 
 		//compute the gradient
 		ierr = MatMultTranspose(user->data, user->c_node, user->g_node); CHKERRQ(ierr);
