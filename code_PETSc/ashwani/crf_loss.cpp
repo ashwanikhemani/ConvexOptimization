@@ -199,8 +199,8 @@ namespace crf_loss{
 		MPI_Allreduce(MPI_IN_PLACE, f, 1, MPI_DOUBLE, MPI_SUM, PETSC_COMM_WORLD);
 
 		// Print the vector w
-		ierr = PetscPrintf(PETSC_COMM_WORLD, "Let's see the new w_edge vector\n"); CHKERRQ(ierr);
-		ierr = VecView(w, PETSC_VIEWER_STDOUT_WORLD); CHKERRQ(ierr);
+		//ierr = PetscPrintf(PETSC_COMM_WORLD, "Let's see the new w_edge vector\n"); CHKERRQ(ierr);
+		//ierr = VecView(w, PETSC_VIEWER_STDOUT_WORLD); CHKERRQ(ierr);
 
 		// Compute the regularization
 		ierr = VecDot(w, w, &reg); CHKERRQ(ierr);
