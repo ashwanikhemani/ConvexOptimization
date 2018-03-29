@@ -201,7 +201,7 @@ namespace crf_loss{
 		ierr = VecDot(w, w, &reg); CHKERRQ(ierr);
 		*f = *f + reg * user->lambda / 2.0;
 
-		//compute the gradient
+		//compute the node gradient g_node
 		ierr = MatMultTranspose(user->data, user->c_node, user->g_node); CHKERRQ(ierr);
 
 		//gather all proccess' contribution to g_edge
@@ -313,13 +313,44 @@ namespace crf_loss{
 	// Output Parameters:
 	// 	 None. Display the letter-wise and word-wise error rates 
 	PetscErrorCode Evaluate(Vec w, AppCtx* user) {
+
 		PetscErrorCode    ierr;
+		PetscInt lError, wError;	
 
 		PetscFunctionBegin;
 		
-		/* 
-			Your Implementation here 
-		*/
+		ierr = MatMult(user->M1, w, user->w_node); CHKERRQ(ierr);
+		
+		ierr = MatMult(user->data, user->w_node, user->fx); CHKERRQ(ierr);
+		// Get the error of word and letter for the local sub-dataset of training data
+
+		ierr = get_errors(user->fx,user->labels,user->w_edgeloc,&user->seq, user,&lError, &wError);
+		CHKERRQ(ierr);
+		
+				// Sum up the errors (both word wise and letter wise)
+		MPI_Allreduce(MPI_IN_PLACE, &lError, 1, MPIU_INT, MPI_SUM, PETSC_COMM_WORLD);
+		MPI_Allreduce(MPI_IN_PLACE, &wError, 1, MPIU_INT, MPI_SUM, PETSC_COMM_WORLD);
+
+		if (user->rank == 0)
+			PetscPrintf(PETSC_COMM_SELF, "%f\t%f\t", 
+									lError*100.0/user->m, wError*100.0/user->seq.wGlobalCount);
+
+		// Repeat the above for test data
+		
+		ierr = MatMult(user->tdata, user->w_node, user->tfx); CHKERRQ(ierr);
+
+		// Get the error of word and letter for the local sub-dataset of training data
+
+		get_errors(user->tfx,user->tlabels,user->w_edgeloc,&user->seq, user,&lError, &wError);
+		CHKERRQ(ierr);
+		
+				// Sum up the errors (both word wise and letter wise)
+		MPI_Allreduce(MPI_IN_PLACE, &lError, 1, MPIU_INT, MPI_SUM, PETSC_COMM_WORLD);
+		MPI_Allreduce(MPI_IN_PLACE, &wError, 1, MPIU_INT, MPI_SUM, PETSC_COMM_WORLD);
+
+		if (user->rank == 0)
+			PetscPrintf(PETSC_COMM_SELF, "%f\t%f\n", 
+				lError*100.0/user->m, wError*100.0/user->seq.wGlobalCount);
 		
 		PetscFunctionReturn(0);		
 	}
