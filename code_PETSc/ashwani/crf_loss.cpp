@@ -191,7 +191,11 @@ namespace crf_loss{
 		user->matvec_timer.start();			
 		
 		ierr = MatMult(user->M2, w, user->w_edge); CHKERRQ(ierr);
-		
+
+		// Sum up the contribution of gradient from all processes
+		ierr = VecScatterBegin(user->scatter,  user->w_edge, user->w_edgeloc, INSERT_VALUES, SCATTER_FORWARD); CHKERRQ(ierr);
+		ierr = VecScatterEnd(user->scatter,  user->w_edge, user->w_edgeloc, INSERT_VALUES, SCATTER_FORWARD); CHKERRQ(ierr);
+
 		// Computes the function and gradient coefficients 
 		ierr = loss_coef(user->fx, user->labels, user->w_edgeloc,user->c_node, user->g_edgeloc , f , user, &user->seq);	CHKERRQ(ierr);
 		
@@ -212,6 +216,7 @@ namespace crf_loss{
 		ierr = MatMultTranspose(user->data, user->c_node, user->g_node); CHKERRQ(ierr);
 
 		// Sum up the contribution of gradient from all processes
+		ierr = VecSet(user->g_edge,0.0);
 		ierr = VecScatterBegin(user->scatter, user->g_edgeloc, user->g_edge, ADD_VALUES, SCATTER_REVERSE); CHKERRQ(ierr);
 		ierr = VecScatterEnd(user->scatter, user->g_edgeloc, user->g_edge, ADD_VALUES, SCATTER_REVERSE); CHKERRQ(ierr);
 
@@ -351,7 +356,7 @@ namespace crf_loss{
 
 		// Get the error of word and letter for the local sub-dataset of training data
 
-		get_errors(user->tfx,user->tlabels,user->w_edgeloc,&user->seq, user,&lError, &wError);
+		get_errors(user->tfx,user->tlabels,user->w_edgeloc,&user->tseq, user,&lError, &wError);
 		CHKERRQ(ierr);
 		
 				// Sum up the errors (both word wise and letter wise)
@@ -359,8 +364,8 @@ namespace crf_loss{
 		MPI_Allreduce(MPI_IN_PLACE, &wError, 1, MPIU_INT, MPI_SUM, PETSC_COMM_WORLD);
 
 		if (user->rank == 0)
-			PetscPrintf(PETSC_COMM_SELF, "%f %f ", 
-									lError*100.0/user->m, wError*100.0/user->seq.wGlobalCount);
+			PetscPrintf(PETSC_COMM_SELF, "%f %f \n", 
+									lError*100.0/user->m, wError*100.0/user->tseq.wGlobalCount);
 
 		
 		PetscFunctionReturn(0);		
