@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
   
 	// Solve the optimization problem 
 	if (user.rank == 0) 
-		PetscPrintf(PETSC_COMM_SELF, "iter fn.val gap time feval.num train_lett_err train_word_err test_lett_err test_word_err \n");
+		PetscPrintf(PETSC_COMM_SELF, "iter\tfunc.val\tgap time\tfeval.num\tnfuncs\ttrain_lett_err\ttrain_word_err\ttest_lett_err\ttest_word_err\n");
   user.opt_timer.start();		// Start the timer 
 	ierr = TaoSolve(tao); CHKERRQ(ierr);  
   user.opt_timer.stop();	// Stop the timer
@@ -191,7 +191,7 @@ PetscErrorCode Monitor(Tao tao, void *ctx) {
   ierr = TaoGetCurrentFunctionEvaluations(tao, &nfuncs);	CHKERRQ(ierr);
   
   if (user->rank == 0)
-    PetscPrintf(PETSC_COMM_SELF, "%D %g %g %g %D ", iter, f, gnorm, user->opt_timer.wallclock_total, nfuncs);
+    PetscPrintf(PETSC_COMM_SELF, "%D\t%.9g\t%.9g\t%.9g\t%D\t", iter, f, gnorm, user->opt_timer.wallclock_total, nfuncs);
   
   ierr = TaoGetSolutionVector(tao, &w); CHKERRQ(ierr);	// retrieve the current solution w
 	ierr = Evaluate(w, user); CHKERRQ(ierr);	// print performance measure on training/test data

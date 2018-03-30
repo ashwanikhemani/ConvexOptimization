@@ -190,6 +190,10 @@ namespace crf_loss{
 		//compute dot products
 		ierr = MatMult(user->data, user->w_node, user->fx); CHKERRQ(ierr);
 		
+		//scater w_edeloc
+		ierr = VecScatterBegin(user->scatter, user->w_edge, user->w_edgeloc, INSERT_VALUES, SCATTER_FORWARD); CHKERRQ(ierr);
+		ierr = VecScatterEnd(user->scatter, user->w_edge, user->w_edgeloc, INSERT_VALUES, SCATTER_FORWARD); CHKERRQ(ierr);
+		
 		//run marginal inference
 		ierr = loss_coef(user->fx, user->labels, user->w_edgeloc, user->c_node, user->g_edgeloc, f, user, &user->seq);
 		CHKERRQ(ierr);
@@ -205,6 +209,10 @@ namespace crf_loss{
 		ierr = MatMultTranspose(user->data, user->c_node, user->g_node); CHKERRQ(ierr);
 
 		//gather all proccess' contribution to g_edge
+		ierr = VecSet(user->g_edge, 0.0); CHKERRQ(ierr);
+		ierr = VecAssemblyBegin(user->g_edge); CHKERRQ(ierr);
+		ierr = VecAssemblyEnd(user->g_edge); CHKERRQ(ierr);
+
 		ierr = VecScatterBegin(user->scatter, user->g_edgeloc, user->g_edge, ADD_VALUES, SCATTER_REVERSE); CHKERRQ(ierr);
 		ierr = VecScatterEnd(user->scatter, user->g_edgeloc, user->g_edge, ADD_VALUES, SCATTER_REVERSE); CHKERRQ(ierr);
 
@@ -214,7 +222,6 @@ namespace crf_loss{
 
 		//and do a final step to compute gradient
 		ierr = VecAXPY(G, user->lambda, w); CHKERRQ(ierr);
-
 
 		user->objgrad_timer.stop();
 		PetscFunctionReturn(0);
@@ -322,8 +329,8 @@ namespace crf_loss{
 		ierr = MatMult(user->M1, w, user->w_node); CHKERRQ(ierr);
 		
 		ierr = MatMult(user->data, user->w_node, user->fx); CHKERRQ(ierr);
+	
 		// Get the error of word and letter for the local sub-dataset of training data
-
 		ierr = get_errors(user->fx,user->labels,user->w_edgeloc,&user->seq, user,&lError, &wError);
 		CHKERRQ(ierr);
 		
@@ -341,7 +348,7 @@ namespace crf_loss{
 
 		// Get the error of word and letter for the local sub-dataset of training data
 
-		get_errors(user->tfx,user->tlabels,user->w_edgeloc,&user->seq, user,&lError, &wError);
+		get_errors(user->tfx,user->tlabels,user->w_edgeloc,&user->tseq, user,&lError, &wError);
 		CHKERRQ(ierr);
 		
 				// Sum up the errors (both word wise and letter wise)
@@ -350,7 +357,7 @@ namespace crf_loss{
 
 		if (user->rank == 0)
 			PetscPrintf(PETSC_COMM_SELF, "%f\t%f\n", 
-				lError*100.0/user->m, wError*100.0/user->seq.wGlobalCount);
+				lError*100.0/user->m, wError*100.0/user->tseq.wGlobalCount);
 		
 		PetscFunctionReturn(0);		
 	}
