@@ -1,0 +1,51 @@
+\documentclass[11pt]{report}
+\usepackage{./assignment}
+\usepackage{graphicx}
+
+\lecturenumber{2}       % assignment number
+\duedate{17:00, April 10, 2018}
+
+% Fill in your name and email address
+\stuinfo{George Maratos, Ashwani Khemani}{gmarat2@uic.edu, akhema2@uic.edu}
+\graphicspath{{./}{./Figures/}}
+
+\begin{document}
+
+\maketitle
+
+\section*{Question P1}
+\begin{verbatim}
+iter func.val gap time feval.num train_lett_err train_word_err test_lett_err test_word_err
+0 24.5949329 4.55704418 0.521893978 1 92.309174 100.000000 93.091357 100.000000
+1 20.2619527 5.09500228 2.1071229 3 71.379031 100.000000 72.095711 100.000000
+2 17.4280532 3.65686478 2.90276504 4 66.662814 99.825480 67.009594 99.883687
+3 15.3063722 2.66873138 3.70153904 5 53.442762 97.643979 54.005317 97.702821
+4 13.2139426 2.13033316 4.48281908 6 45.382037 96.160558 46.075598 95.347485
+5 10.8951126 2.51806306 5.28561425 7 39.675567 91.826643 40.808384 92.294272
+6 9.33821858 1.17139586 6.07544017 8 33.791855 87.056428 34.978615 87.699913
+7 8.76213396 0.87446294 6.86494994 9 31.568605 84.293194 32.632066 85.228264
+8 7.90650424 0.849892316 7.6622529 10 28.570878 80.424666 29.638192 81.942425
+9 7.31265051 1.54717585 8.45745993 11 27.129812 77.370564 28.385928 78.016865
+10 6.80867555 0.727934637 9.26300693 12 24.594459 73.007563 25.892960 74.498401
+:
+:
+95 3.33946396 0.00445979302 76.2979987 98 10.858090 40.517743 14.499287 49.520209
+Optimization converged with status CONVERGED_GTTOL.
+\end{verbatim}
+
+\section*{Question P2}
+See figure 1 for the plot.
+\begin{figure}[b]
+\centering
+\includegraphics[scale=0.4]{p2_figure.png}
+\caption{Determining the effect of lambda on Test Error}
+\end{figure}
+\section*{Question P3}
+
+\begin{figure}[b]
+\centering
+\includegraphics[scale=0.4]{p3_figure.png}
+\caption{Plot of Letter and Word Error}
+\end{figure}
+
+\end{document}
