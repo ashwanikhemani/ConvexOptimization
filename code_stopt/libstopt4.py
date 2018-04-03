@@ -77,15 +77,16 @@ def compute_test_error(W, T):
 		if s > 0:
 			word_error += 1
 		letter_error += s
-	print(f"Letter Error {letter_error/letter_count}, Word {word_error/len(test_data)}")
+	print(f"Letter Error {letter_error/letter_count},\
+Word {word_error/len(test_data)}")
 		
 def sgd(init, lr, lmda):
 #runs stochastic gradient descent on the function defined above
-#it also assumes the data you want to use
 #starting at the intial guess of the params provided as an argument
+#it also assumes the data you want to use is train_sgd, test_sgd
+#outputs the letter and word wise error after ~1000 updates
   
 	data = read_data.read_train_sgd()
-	#create views of copy of init
 	guess = np.copy(init)
 	W, T = guess[:26*129].reshape((26, 129)),\
 		guess[26*129:].reshape((26, 26))
@@ -100,5 +101,42 @@ def sgd(init, lr, lmda):
 			if j % 1000 == 0:
 				compute_test_error(W, T)
 
+def adam(init, lr, lmda, epsilon):
+#runs adam optimizer, inspired by ashwani
+
+	data = read_data.read_train_sgd()
+	guess = np.copy(init)
+	W, T = guess[:26*129].reshape((26, 129)),\
+		guess[26*129:].reshape((26, 26))
+
+	#adam parameters
+	t, b1, b2, = 0, 0.9, 0.999
+	m, v = np.zeros(26*129+26*26), np.zeros(26*129+26*26)
+
+	while True:
+		t += 1
+		func_prime(guess, data[t%len(data)], lmda)
+
+		np.multiply(b1, m, out=m)
+		np.add(m, np.multiply((1-b1), log_grad), out=m)
+
+		np.multiply(b2, v, out=v)
+		np.square(log_grad, out=log_grad)
+		np.multiply((1-b2), log_grad, out=log_grad)
+		np.add(v, log_grad, out=v)
+
+		np.divide(m, (1-np.power(b1, t)), out=m)
+		np.divide(v, (1-np.power(b2, t)), out=v)
+
+		np.multiply(-1*lr, m, out=m)
+		np.sqrt(v, out=v)
+		np.add(v, epsilon, out=v)
+		np.divide(m, v, out=m)
+		np.add(guess, m, out=guess)
+
+		if t % 3000 == 0:
+			compute_test_error(W, T)
+
+
 init = np.zeros((26*129+26*26))
-sgd(init, 1e-3, 1e-3)
+adam(init, 1e-3, 1e-3, 1e-8)
