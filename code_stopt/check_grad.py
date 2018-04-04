@@ -1,7 +1,7 @@
 import numpy as np, read_data, prob_grad
 from scipy.optimize import check_grad
 
-l = 1e-6
+l = 1 
 data = read_data.read_train_sgd()
 
 def func(params, *args):
@@ -22,7 +22,6 @@ log_grad = np.zeros(26*129+26*26)
 
 l_gw, l_gt = log_grad[:26*129].reshape((26, 129)),\
 	log_grad[26*129:].reshape((26, 26))
-
 
 def func_prime(params, *args):
 #computes the derivative of a single example

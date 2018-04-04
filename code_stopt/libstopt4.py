@@ -1,10 +1,5 @@
 import numpy as np, prob_grad, read_data, random
 
-#this is internal memory for func_prime
-log_grad = np.zeros(26*129+26*26)
-l_gw, l_gt = log_grad[:26*129].reshape((26, 129)),\
-	log_grad[26*129:].reshape((26, 26))
-
 def func(params, *args):
 #computes function value for a single example
 
@@ -20,6 +15,11 @@ def func(params, *args):
 	return -1*log_p/len(data) + 0.5*l*(\
 		np.sum(np.square(np.linalg.norm(W, axis=1))) +\
 		np.sum(np.square(T)))
+
+#this is internal memory for func_prime
+log_grad = np.zeros(26*129+26*26)
+l_gw, l_gt = log_grad[:26*129].reshape((26, 129)),\
+	log_grad[26*129:].reshape((26, 26))
 
 def func_prime(params, *args):
 #computes the derivative of a single example
@@ -93,7 +93,6 @@ def sgd(init, lr, lmda):
 
 	compute_test_error(W, T)
 	for i in range(100):
-		random.shuffle(data)
 		for j in range(len(data)):
 			func_prime(guess, data[j], lmda)
 			np.multiply(lr*-1, log_grad, out=log_grad)
@@ -139,4 +138,5 @@ def adam(init, lr, lmda, epsilon):
 
 
 init = np.zeros((26*129+26*26))
-adam(init, 1e-3, 1e-3, 1e-8)
+#sgd(init, 1e-3, 10)
+adam(init, 1e-3, 0, 1e-8)
