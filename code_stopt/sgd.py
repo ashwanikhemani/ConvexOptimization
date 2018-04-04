@@ -39,7 +39,7 @@ def func_prime(params, *args):
 	#add regularizers
 	np.add(log_grad, np.multiply(l, params), out=log_grad)
 
-
+   return log_grad
 #initial guess of 0
 guess = np.zeros((26*129+26*26))
 data = read_data.read_train_sgd()
