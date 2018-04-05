@@ -1,7 +1,7 @@
-import numpy as np, read_data, prob_grad
+import numpy as np, read_data, prob_grad, random
 from scipy.optimize import check_grad
 
-l = 1 
+l = 0
 data = read_data.read_train_sgd()
 
 def func(params, *args):
@@ -15,7 +15,7 @@ def func(params, *args):
 	log_p = prob_grad.compute_log_p(x, y, W, T)
 	
 	return -1*log_p + 0.5*l*(\
-		np.sum(np.square(np.linalg.norm(W, axis=1))) +\
+		np.sum(np.square(W)) +\
 		np.sum(np.square(T)))
 
 log_grad = np.zeros(26*129+26*26)
@@ -42,4 +42,4 @@ def func_prime(params, *args):
 
 params = np.random.rand((26*129+26*26))
 
-print(check_grad(func, func_prime, params, data[7], l))
+print(check_grad(func, func_prime, params, random.choice(data), l))
