@@ -1,7 +1,7 @@
 import numpy as np, read_data, prob_grad, random
 from scipy.optimize import check_grad
 
-l = 0
+l = 1
 data = read_data.read_train_sgd()
 
 def func(params, *args):
@@ -18,10 +18,6 @@ def func(params, *args):
 		np.sum(np.square(W)) +\
 		np.sum(np.square(T)))
 
-log_grad = np.zeros(26*129+26*26)
-
-l_gw, l_gt = log_grad[:26*129].reshape((26, 129)),\
-	log_grad[26*129:].reshape((26, 26))
 
 def func_prime(params, *args):
 #computes the derivative of a single example
@@ -30,6 +26,11 @@ def func_prime(params, *args):
 		params[26*129:].reshape((26, 26))
 	x, y = args[0]
 	l = args[1]
+
+	log_grad = np.zeros(26*129+26*26)
+
+	l_gw, l_gt = log_grad[:26*129].reshape((26, 129)),\
+	log_grad[26*129:].reshape((26, 26))
 
 	#compute first part of objective
 	np.multiply(prob_grad.log_p_wgrad(W, x, y, T), -1, out=l_gw)
@@ -40,6 +41,7 @@ def func_prime(params, *args):
 
 	return log_grad
 
-params = np.random.rand((26*129+26*26))
+#params = np.random.rand((26*129+26*26))
+params = np.ones((26*129+26*26))
 
 print(check_grad(func, func_prime, params, random.choice(data), l))
