@@ -122,13 +122,17 @@ def sgd(path, init, lr, lmda):
 	print(f"Starting SGD with Momentum: lr:{lr} lambda:{lmda}")
 	print(f"Starting SGD with Momentum: lr:{lr} lambda:{lmda}", file=f)
 	while True:
-		print(f"{i}:{func(guess, data, lmda)}:{lr}", file=f)
-		print(f"{i}\t{func(guess, data, lmda)}\t{lr}")
+		#compute decay rate
+		temp_lr = lr/(1+0.1*i)
+
+		print(f"{i}:{func(guess, data, lmda)}:{temp_lr}", file=f)
+		print(f"{i}\t{func(guess, data, lmda)}\t{temp_lr}")
 
 		for j in range(len(data)):
+
 			func_prime(guess, data[j], lmda)
 			np.multiply(0.9, m, out=m)
-			np.multiply(lr, log_grad, out=log_grad)
+			np.multiply(temp_lr, log_grad, out=log_grad)
 			np.add(m, log_grad, out=m)
 			np.subtract(guess, m, out=guess)
 
