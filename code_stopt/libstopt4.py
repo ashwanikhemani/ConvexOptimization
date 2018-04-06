@@ -95,7 +95,7 @@ def compute_test_error(W, T):
 	print(f"Letter Error {letter_error/letter_count},\
 Word {word_error/len(test_data)}")
 		
-def sgd(init, lr, lmda):
+def sgd(path, init, lr, lmda):
 #runs stochastic gradient descent on the function defined above
 #starting at the intial guess of the params provided as an argument
 #it also assumes the data you want to use is train_sgd, test_sgd
@@ -113,7 +113,7 @@ def sgd(init, lr, lmda):
 		guess[26*129:].reshape((26, 26))
 
 	#variables for printing to file
-	i, f = 0, open("../results/S1/sgd-1e-2.txt", "w")
+	i, f = 0, open(path+f"/sgd-{lr}-{lmda}.txt" , "w")
 
 	#momentum variable
 	m = np.zeros(129*26+26*26, dtype=np.longdouble)
@@ -134,7 +134,7 @@ def sgd(init, lr, lmda):
 
 		i += 1
 
-def adam(init, lr, lmda, epsilon):
+def adam(path, init, lr, lmda, epsilon):
 #runs adam optimizer, inspired by ashwani
 
 	print("Reading Train Data...")
@@ -148,8 +148,10 @@ def adam(init, lr, lmda, epsilon):
 	#adam parameters
 	t, b1, b2, = 0, 0.9, 0.999
 	m, v = np.zeros(26*129+26*26, dtype=np.longdouble), np.zeros(26*129+26*26, dtype=np.longdouble)
-	i, f = 0, open("../results/S1/adam-1e-6.txt", "w")
+	i, f = 0, open(path+f"/adam-{lr}-{lmda}.txt"  , "w")
 
+	print(f"Running Adam: lr:{lr} lambda:{lmda} epsilon:{epsilon}")
+	print(f"Running Adam: lr:{lr} lambda:{lmda} epsilon:{epsilon}", file=f)
 	while True:
 
 		if t % 3438 == 0:
@@ -180,6 +182,6 @@ def adam(init, lr, lmda, epsilon):
 
 
 
-init = np.zeros((26*129+26*26), dtype=np.longdouble)
-sgd(init, 1e-3, 1e-2)
-#adam(init, 1e-1, 1e-4, 1e-8)
+#init = np.zeros((26*129+26*26), dtype=np.longdouble)
+#sgd(init, 1e-3, 1e-2)
+#adam(init, 1e-2, 1e-6, 1e-8)
