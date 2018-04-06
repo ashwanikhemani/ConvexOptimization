@@ -1,7 +1,7 @@
 import numpy as np, read_data, prob_grad, random
 from scipy.optimize import check_grad
 
-l = 1
+l = 10
 data = read_data.read_train_sgd()
 
 def func(params, *args):
@@ -42,6 +42,6 @@ def func_prime(params, *args):
 	return log_grad
 
 #params = np.random.rand((26*129+26*26))
-params = np.ones((26*129+26*26))
+params = np.multiply(0.1, np.ones((26*129+26*26)))
 
 print(check_grad(func, func_prime, params, random.choice(data), l))

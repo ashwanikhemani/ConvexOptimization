@@ -18,7 +18,6 @@ def func(params, *args):
 		np.sum(np.square(W)) +\
 		np.sum(np.square(T)))
 
-#this is internal memory for func_prime
 def func1(params, *args):
 #computes function value for a single example
 
@@ -33,6 +32,7 @@ def func1(params, *args):
 		np.sum(np.square(W)) +\
 		np.sum(np.square(T)))
 
+#this is internal memory for func_prime
 log_grad = np.zeros(26*129+26*26, dtype=np.longdouble)
 l_gw, l_gt = log_grad[:26*129].reshape((26, 129)),\
 	log_grad[26*129:].reshape((26, 26))
@@ -83,8 +83,6 @@ def max_sum(X, W, T):
 
 	return y_star
 
-test_data = read_data.read_test_sgd()
-
 def compute_test_error(W, T):
 	letter_error, letter_count, word_error = 0.0, 0.0, 0
 	for example in test_data:
@@ -102,21 +100,28 @@ def sgd(init, lr, lmda):
 #starting at the intial guess of the params provided as an argument
 #it also assumes the data you want to use is train_sgd, test_sgd
 #outputs the letter and word wise error after ~1000 updates
+#the below line is for testing if needed
+#print(check_grad(func1, func_prime, guess, random.choice(data), lmda))
   
+	print("Reading Train Data...")
 	data = read_data.read_train_sgd()
+	print("Reading Test Data...")
+	test_data = read_data.read_test_sgd()
+
 	guess = np.copy(init)
 	W, T = guess[:26*129].reshape((26, 129)),\
 		guess[26*129:].reshape((26, 26))
 
 	#variables for printing to file
-	i, f = 0, open("../results/S1/sgd-1e-4.txt", "w")
+	i, f = 0, open("../results/S1/sgd-1e-2.txt", "w")
 
 	#momentum variable
 	m = np.zeros(129*26+26*26, dtype=np.longdouble)
 
 	#Run descent forever
+	print(f"Starting SGD with Momentum: lr:{lr} lambda:{lmda}")
+	print(f"Starting SGD with Momentum: lr:{lr} lambda:{lmda}", file=f)
 	while True:
-#		print(check_grad(func1, func_prime, guess, random.choice(data), lmda))
 		print(f"{i}:{func(guess, data, lmda)}:{lr}", file=f)
 		print(f"{i}\t{func(guess, data, lmda)}\t{lr}")
 
@@ -129,19 +134,21 @@ def sgd(init, lr, lmda):
 
 		i += 1
 
-
 def adam(init, lr, lmda, epsilon):
 #runs adam optimizer, inspired by ashwani
 
+	print("Reading Train Data...")
 	data = read_data.read_train_sgd()
+	print("Reading Test Data...")
+	test_data = read_data.read_test_sgd()
 	guess = np.copy(init)
 	W, T = guess[:26*129].reshape((26, 129)),\
 		guess[26*129:].reshape((26, 26))
 
 	#adam parameters
 	t, b1, b2, = 0, 0.9, 0.999
-	m, v = np.zeros(26*129+26*26, dtype=np.longdouble), np.zeros(26*129+26*26, np.longdouble)
-	i, f = 0, open("../results/S1/adam-1e-4.txt", "w")
+	m, v = np.zeros(26*129+26*26, dtype=np.longdouble), np.zeros(26*129+26*26, dtype=np.longdouble)
+	i, f = 0, open("../results/S1/adam-1e-6.txt", "w")
 
 	while True:
 
@@ -174,5 +181,5 @@ def adam(init, lr, lmda, epsilon):
 
 
 init = np.zeros((26*129+26*26), dtype=np.longdouble)
-#sgd(init, 5e-3, 1e-4)
-adam(init, 1e-1, 1e-4, 1e-8)
+sgd(init, 1e-3, 1e-2)
+#adam(init, 1e-1, 1e-4, 1e-8)

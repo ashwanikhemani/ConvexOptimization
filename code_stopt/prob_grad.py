@@ -10,9 +10,9 @@ def compute_log_p(X, y, W, T):
 	for i in range(1, X.shape[0]):
 		sum_num += numpy.dot(W[y[i]], X[i]) + T[y[i-1], y[i]]
 	
-	trellisfw = numpy.zeros((X.shape[0], alpha_len))
-	interior = numpy.zeros(alpha_len)
-	messages = numpy.zeros((26, 26))
+	trellisfw = numpy.zeros((X.shape[0], alpha_len), dtype=numpy.longdouble)
+	interior = numpy.zeros(alpha_len, dtype=numpy.longdouble)
+	messages = numpy.zeros((26, 26), dtype=numpy.longdouble)
 
 	for i in range(1, X.shape[0]):
 		numpy.matmul(W, X[i-1], out=interior)
@@ -39,11 +39,11 @@ def compute_log_p(X, y, W, T):
 def fb_prob(X, W, T):
 	alpha_len = 26
 
-	trellisfw = numpy.zeros((X.shape[0], alpha_len))
-	trellisbw = numpy.zeros((X.shape[0], alpha_len))
+	trellisfw = numpy.zeros((X.shape[0], alpha_len), dtype=numpy.longdouble)
+	trellisbw = numpy.zeros((X.shape[0], alpha_len), dtype=numpy.longdouble)
 
-	interior = numpy.zeros(alpha_len)
-	messages = numpy.zeros((26, 26))
+	interior = numpy.zeros(alpha_len, dtype=numpy.longdouble)
+	messages = numpy.zeros((26, 26), dtype=numpy.longdouble)
 
 	#forward part
 	for i in range(1, X.shape[0]):
@@ -82,10 +82,10 @@ def fb_prob(X, W, T):
 
 def log_p_wgrad(W, X, y, T):
 #will compute the gradient of an example
-	grad = numpy.zeros((26, 129)) #size of the alphabet by 128 elems
-	expect = numpy.zeros(26)
+	grad = numpy.zeros((26, 129),dtype=numpy.longdouble) #size of the alphabet by 128 elems
+	expect = numpy.zeros(26, dtype=numpy.longdouble)
 	trellisfw, trellisbw, log_z = fb_prob(X, W, T)
-	prob = numpy.zeros(26)
+	prob = numpy.zeros(26, dtype=numpy.longdouble)
 	for i in range(X.shape[0]):
 		#compute the marginal probability for all nodes in this column
 		numpy.add(trellisfw[i, :], trellisbw[i, :], out=prob)
@@ -107,9 +107,9 @@ def log_p_wgrad(W, X, y, T):
 
 def log_p_tgrad(T, X, y, W):
 #will compute the gradient of an example
-	grad = numpy.zeros((26, 26))
-	potential = numpy.zeros((26, 26))
-	expect = numpy.zeros((26, 26))
+	grad = numpy.zeros((26, 26), dtype=numpy.longdouble)
+	potential = numpy.zeros((26, 26), dtype=numpy.longdouble)
+	expect = numpy.zeros((26, 26), dtype=numpy.longdouble)
 	trellisfw, trellisbw, log_z = fb_prob(X, W, T)
 
 	for i in range(X.shape[0]-1):
