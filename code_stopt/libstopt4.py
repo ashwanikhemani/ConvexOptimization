@@ -1,4 +1,6 @@
 import numpy as np, prob_grad, read_data, random
+from scipy.optimize import check_grad
+import random
 
 def func(params, *args):
 #computes function value for a single example
@@ -13,11 +15,25 @@ def func(params, *args):
 		log_p += prob_grad.compute_log_p(example[0], example[1], W, T)
 	
 	return -1*log_p/len(data) + 0.5*l*(\
-		np.sum(np.square(np.linalg.norm(W, axis=1))) +\
+		np.sum(np.square(W)) +\
 		np.sum(np.square(T)))
 
 #this is internal memory for func_prime
-log_grad = np.zeros(26*129+26*26)
+def func1(params, *args):
+#computes function value for a single example
+
+	W, T = params[:26*129].reshape((26, 129)),\
+		params[26*129:].reshape((26, 26))
+	x, y = args[0]
+	l = args[1]
+
+	log_p = prob_grad.compute_log_p(x, y, W, T)
+	
+	return -1*log_p + 0.5*l*(\
+		np.sum(np.square(W)) +\
+		np.sum(np.square(T)))
+
+log_grad = np.zeros(26*129+26*26, dtype=np.longdouble)
 l_gw, l_gt = log_grad[:26*129].reshape((26, 129)),\
 	log_grad[26*129:].reshape((26, 26))
 
@@ -37,6 +53,7 @@ def func_prime(params, *args):
 	np.add(log_grad, np.multiply(l, params), out=log_grad)
 
 	#I should return log_grad, but I am not for speed
+	return log_grad
 
 def max_sum(X, W, T):
 #never called directly
@@ -66,7 +83,7 @@ def max_sum(X, W, T):
 
 	return y_star
 
-test_data = read_data.read_test_sgd()[:100]
+test_data = read_data.read_test_sgd()
 
 def compute_test_error(W, T):
 	letter_error, letter_count, word_error = 0.0, 0.0, 0
@@ -91,14 +108,27 @@ def sgd(init, lr, lmda):
 	W, T = guess[:26*129].reshape((26, 129)),\
 		guess[26*129:].reshape((26, 26))
 
-	compute_test_error(W, T)
-	for i in range(100):
+	#variables for printing to file
+	i, f = 0, open("../results/S1/sgd-1e-4.txt", "w")
+
+	#momentum variable
+	m = np.zeros(129*26+26*26, dtype=np.longdouble)
+
+	#Run descent forever
+	while True:
+#		print(check_grad(func1, func_prime, guess, random.choice(data), lmda))
+		print(f"{i}:{func(guess, data, lmda)}:{lr}", file=f)
+		print(f"{i}\t{func(guess, data, lmda)}\t{lr}")
+
 		for j in range(len(data)):
 			func_prime(guess, data[j], lmda)
-			np.multiply(lr*-1, log_grad, out=log_grad)
-			np.add(guess, log_grad, out=guess)
-			if j % 1000 == 0:
-				compute_test_error(W, T)
+			np.multiply(0.9, m, out=m)
+			np.multiply(lr, log_grad, out=log_grad)
+			np.add(m, log_grad, out=m)
+			np.subtract(guess, m, out=guess)
+
+		i += 1
+
 
 def adam(init, lr, lmda, epsilon):
 #runs adam optimizer, inspired by ashwani
@@ -110,10 +140,17 @@ def adam(init, lr, lmda, epsilon):
 
 	#adam parameters
 	t, b1, b2, = 0, 0.9, 0.999
-	m, v = np.zeros(26*129+26*26), np.zeros(26*129+26*26)
+	m, v = np.zeros(26*129+26*26, dtype=np.longdouble), np.zeros(26*129+26*26, np.longdouble)
+	i, f = 0, open("../results/S1/adam-1e-4.txt", "w")
 
 	while True:
+
+		if t % 3438 == 0:
+			print(f"{i}:{func(guess, data, lmda)}")
+			print(f"{i}:{func(guess, data, lmda)}", file=f)
+			i += 1
 		t += 1
+
 		func_prime(guess, data[t%len(data)], lmda)
 
 		np.multiply(b1, m, out=m)
@@ -133,10 +170,9 @@ def adam(init, lr, lmda, epsilon):
 		np.divide(m, v, out=m)
 		np.add(guess, m, out=guess)
 
-		if t % 3000 == 0:
-			compute_test_error(W, T)
 
 
-init = np.zeros((26*129+26*26))
-#sgd(init, 1e-3, 10)
-adam(init, 1e-3, 0, 1e-8)
+
+init = np.zeros((26*129+26*26), dtype=np.longdouble)
+#sgd(init, 5e-3, 1e-4)
+adam(init, 1e-1, 1e-4, 1e-8)
