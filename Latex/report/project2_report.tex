@@ -34,13 +34,24 @@ Optimization converged with status CONVERGED_GTTOL.
 \end{verbatim}
 
 \section*{Question P2}
-See figure 1 for the plot.
+See figure 1 for the plot. Yes, using a larger value of $\lambda$
+will allow for faster convergence.
+
 \begin{figure}[b]
 \centering
 \includegraphics[scale=0.4]{p2_figure.png}
 \caption{Determining the effect of lambda on Test Error}
 \end{figure}
 \section*{Question P3}
+See figure 2 for the plot. We observe that while test error is
+higer than train error, the model does a good job of generalizing
+well for letter wise error. Word error is much higher in general,
+but this is expected because getting the entire word correct is
+much harder than getting a single letter. The objective value 
+drops dramaticaly during training for the first 20 seconds. We
+conclude that a drop in objective value is correlated with a drop
+in error, because we observe a similar drop in the same time frame.
+
 
 \begin{figure}[b]
 \centering
@@ -48,4 +59,23 @@ See figure 1 for the plot.
 \caption{Plot of Letter and Word Error}
 \end{figure}
 
+\section*{Question P4}
+See figure 3 for the plot. The curve is not linear, as can be observed
+in the plot. Linearity breaks around 5 cores. We cannot expect a perpetual
+linear speed up from increased levels of parallelization. Consider an
+arbitrary task that has 100 independent atomic operations. Parallelizing
+this task will speed up the task, but there will be no benefit from going
+to 101 cores from 100 because the last core will remain idle and contribute
+nothing.
+
+\begin{figure}[b]
+\centering
+\includegraphics[scale=0.4]{p4_figure.png}
+\caption{Plot of Letter and Word Error}
+\end{figure}
+
+\section*{Question P5}
+No we do not need to store $C_{train}$. We can instead, distribute $X_{train}$
+and modify $loss\_coef$ to compute $g_{node}$ directly. This would allow us to
+forget about $C_{train}$ entirely.
 \end{document}
