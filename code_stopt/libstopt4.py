@@ -121,6 +121,7 @@ def sgd(path, init, lr, lmda):
 	#Run descent forever
 	print(f"Starting SGD with Momentum: lr:{lr} lambda:{lmda}")
 	print(f"Starting SGD with Momentum: lr:{lr} lambda:{lmda}", file=f)
+
 	prev = 0.0
 	while True:
 		#compute decay rate
@@ -166,11 +167,20 @@ def adam(path, init, lr, lmda, epsilon):
 
 	print(f"Running Adam: lr:{lr} lambda:{lmda} epsilon:{epsilon}")
 	print(f"Running Adam: lr:{lr} lambda:{lmda} epsilon:{epsilon}", file=f)
+
+	prev = 0.0
 	while True:
 
 		if t % 3438 == 0:
-			print(f"{i}:{func(guess, data, lmda)}")
-			print(f"{i}:{func(guess, data, lmda)}", file=f)
+			current = func(guess, data, lmda)
+			print(f"{i}:{current}")
+			print(f"{i}:{current}", file=f)
+			if abs(current - prev) < 1.0:
+				print("Convergence")
+				return
+			else:
+				prev = current
+
 			i += 1
 		t += 1
 
