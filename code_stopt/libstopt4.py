@@ -121,12 +121,22 @@ def sgd(path, init, lr, lmda):
 	#Run descent forever
 	print(f"Starting SGD with Momentum: lr:{lr} lambda:{lmda}")
 	print(f"Starting SGD with Momentum: lr:{lr} lambda:{lmda}", file=f)
+	prev = 0.0
 	while True:
 		#compute decay rate
-		temp_lr = lr/(1+0.1*i)
+		temp_lr = lr/(1+0.5*i)
 
-		print(f"{i}:{func(guess, data, lmda)}:{temp_lr}", file=f)
-		print(f"{i}\t{func(guess, data, lmda)}\t{temp_lr}")
+		#now check if we have converged print and return if the case
+		current = func(guess, data, lmda)
+
+		print(f"{i}:{current}:{temp_lr}", file=f)
+		print(f"{i}\t{current}\t{temp_lr}")
+
+		if abs(current - prev) < 1.0:
+			print("Convergence")
+			return
+		else:
+			prev = current
 
 		for j in range(len(data)):
 
@@ -152,7 +162,7 @@ def adam(path, init, lr, lmda, epsilon):
 	#adam parameters
 	t, b1, b2, = 0, 0.9, 0.999
 	m, v = np.zeros(26*129+26*26, dtype=np.longdouble), np.zeros(26*129+26*26, dtype=np.longdouble)
-	i, f = 0, open(path+f"/adam-{lr}-{lmda}.txt"  , "w")
+	i, f = 0, open(path+f"/adam-{lr}-{lmda}.txt", "w")
 
 	print(f"Running Adam: lr:{lr} lambda:{lmda} epsilon:{epsilon}")
 	print(f"Running Adam: lr:{lr} lambda:{lmda} epsilon:{epsilon}", file=f)
@@ -163,6 +173,8 @@ def adam(path, init, lr, lmda, epsilon):
 			print(f"{i}:{func(guess, data, lmda)}", file=f)
 			i += 1
 		t += 1
+
+		temp_lr = lr/(1+0.5*i)
 
 		func_prime(guess, data[t%len(data)], lmda)
 
@@ -177,14 +189,11 @@ def adam(path, init, lr, lmda, epsilon):
 		np.divide(m, (1-np.power(b1, t)), out=m)
 		np.divide(v, (1-np.power(b2, t)), out=v)
 
-		np.multiply(-1*lr, m, out=m)
+		np.multiply(-1*temp_lr, m, out=m)
 		np.sqrt(v, out=v)
 		np.add(v, epsilon, out=v)
 		np.divide(m, v, out=m)
 		np.add(guess, m, out=guess)
-
-
-
 
 #init = np.zeros((26*129+26*26), dtype=np.longdouble)
 #sgd(init, 1e-3, 1e-2)
