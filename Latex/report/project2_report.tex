@@ -40,7 +40,7 @@ will allow for faster convergence.
 \begin{figure}[b]
 \centering
 \includegraphics[scale=0.4]{p2_figure.png}
-\caption{Determining the effect of lambda on Test Error}
+\caption{Determining the effect of lambda on Convergence Time}
 \end{figure}
 \section*{Question P3}
 See figure 2 for the plot. We observe that while test error is
@@ -77,5 +77,7 @@ nothing.
 \section*{Question P5}
 No we do not need to store $C_{train}$. We can instead, distribute $X_{train}$
 and modify $loss\_coef$ to compute $g_{node}$ directly. This would allow us to
-forget about $C_{train}$ entirely.
+forget about $C_{train}$ entirely. The computational performance will not be 
+significantly affected.
+
 \end{document}
