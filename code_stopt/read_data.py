@@ -2,6 +2,7 @@ import numpy
 
 def read_train_sgd():
 #function to read train data
+#max word length is 14
 	from string import ascii_lowercase
 	mapping = list(enumerate(ascii_lowercase))
 	mapping = { i[1]:i[0] for i in mapping }
@@ -49,3 +50,4 @@ def read_test_sgd():
 
 	ret = zip(dataX, dataY)
 	return list(ret)
+
