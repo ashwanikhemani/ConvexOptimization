@@ -221,9 +221,10 @@ def sample(data, W, T, s):
 		indx = np.random.randint(0, high=y.shape[0])
 		for j in range(26):
 			y[indx] = j
-			probs[i] =  prob_grad.compute_log_p(X, y, W, T)
+			probs[j] =  prob_grad.compute_log_p(X, y, W, T)
 		np.exp(probs, out=probs)
-		np.divide(probs, np.sum(probs), out=probs)
+		print(np.sum(probs))
+#		np.divide(probs, np.sum(probs), out=probs)
 		y[indx] = np.random.choice(elements, 1, p=probs)
 
 	#now use this to compute gradient
@@ -252,7 +253,7 @@ def adam_mcmc(path, init, lr, lmda, epsilon, s):
 	prev = 0.0
 	while True:
 
-		if t % 3438 == 0:
+		if t % 30 == 0:
 			current = func(guess, data, lmda)
 			print(f"{i}:{current}")
 			print(f"{i}:{current}", file=f)
@@ -293,4 +294,4 @@ def adam_mcmc(path, init, lr, lmda, epsilon, s):
 	
 init = np.zeros((26*129+26*26), dtype=np.longdouble)
 #sgd(init, 1e-3, 1e-2)
-adam_mcmc("output", init, 1e-2, 1e-6, 1e-8, 10)
+adam_mcmc("output", init, 1e-3, 1e-2, 1e-8, 14)
