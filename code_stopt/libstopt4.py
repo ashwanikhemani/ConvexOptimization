@@ -133,7 +133,7 @@ def sgd(path, init, lr, lmda):
 		print(f"{i}:{current}:{temp_lr}", file=f)
 		print(f"{i}\t{current}\t{temp_lr}")
 
-		if abs(current - prev) < 1.0:
+		if abs(current - prev) < 1e-3:
 			print("Convergence")
 			return
 		else:
@@ -156,6 +156,7 @@ def adam(path, init, lr, lmda, epsilon):
 	data = read_data.read_train_sgd()
 	print("Reading Test Data...")
 	test_data = read_data.read_test_sgd()
+
 	guess = np.copy(init)
 	W, T = guess[:26*129].reshape((26, 129)),\
 		guess[26*129:].reshape((26, 26))
@@ -175,7 +176,7 @@ def adam(path, init, lr, lmda, epsilon):
 			current = func(guess, data, lmda)
 			print(f"{i}:{current}")
 			print(f"{i}:{current}", file=f)
-			if abs(current - prev) < 1.0:
+			if abs(current - prev) < 1e-3:
 				print("Convergence")
 				return
 			else:
@@ -205,6 +206,91 @@ def adam(path, init, lr, lmda, epsilon):
 		np.divide(m, v, out=m)
 		np.add(guess, m, out=guess)
 
-#init = np.zeros((26*129+26*26), dtype=np.longdouble)
+def sample(data, W, T, s):
+
+	#pick word from training set
+	X, y = random.choice(data)
+
+	#pick random assignments for the labels
+	y = np.random.randint(0, high=26, size=y.shape[0])
+
+	#sample which is really slow
+	probs = np.zeros(26)
+	elements = np.arange(26)
+	for i in range(s):
+		indx = np.random.randint(0, high=y.shape[0])
+		for j in range(26):
+			y[indx] = j
+			probs[i] =  prob_grad.compute_log_p(X, y, W, T)
+		np.exp(probs, out=probs)
+		np.divide(probs, np.sum(probs), out=probs)
+		y[indx] = np.random.choice(elements, 1, p=probs)
+
+	#now use this to compute gradient
+	return (X, y)
+
+def adam_mcmc(path, init, lr, lmda, epsilon, s):
+#runs adam optimizer, inspired by ashwani
+
+	print("Reading Train Data...")
+	data = read_data.read_train_sgd()
+	print("Reading Test Data...")
+	test_data = read_data.read_test_sgd()
+
+	guess = np.copy(init)
+	W, T = guess[:26*129].reshape((26, 129)),\
+		guess[26*129:].reshape((26, 26))
+
+	#adam parameters
+	t, b1, b2, = 0, 0.9, 0.999
+	m, v = np.zeros(26*129+26*26, dtype=np.longdouble), np.zeros(26*129+26*26, dtype=np.longdouble)
+	i, f = 0, open(path+f"/adam-{lr}-{lmda}.txt", "w")
+
+	print(f"Running Adam: lr:{lr} lambda:{lmda} epsilon:{epsilon}")
+	print(f"Running Adam: lr:{lr} lambda:{lmda} epsilon:{epsilon}", file=f)
+
+	prev = 0.0
+	while True:
+
+		if t % 3438 == 0:
+			current = func(guess, data, lmda)
+			print(f"{i}:{current}")
+			print(f"{i}:{current}", file=f)
+			if abs(current - prev) < 1e-3:
+				print("Convergence")
+				return
+			else:
+				prev = current
+
+			i += 1
+		t += 1
+
+		temp_lr = lr/(1+0.5*i)
+
+		example = sample(data, W, T, s)
+		func_prime(guess, example, lmda)
+
+		np.multiply(b1, m, out=m)
+		np.add(m, np.multiply((1-b1), log_grad), out=m)
+
+		np.multiply(b2, v, out=v)
+		np.square(log_grad, out=log_grad)
+		np.multiply((1-b2), log_grad, out=log_grad)
+		np.add(v, log_grad, out=v)
+
+		np.divide(m, (1-np.power(b1, t)), out=m)
+		np.divide(v, (1-np.power(b2, t)), out=v)
+
+		np.multiply(-1*temp_lr, m, out=m)
+		np.sqrt(v, out=v)
+		np.add(v, epsilon, out=v)
+		np.divide(m, v, out=m)
+		np.add(guess, m, out=guess)
+
+
+
+
+	
+init = np.zeros((26*129+26*26), dtype=np.longdouble)
 #sgd(init, 1e-3, 1e-2)
-#adam(init, 1e-2, 1e-6, 1e-8)
+adam_mcmc("output", init, 1e-2, 1e-6, 1e-8, 10)
