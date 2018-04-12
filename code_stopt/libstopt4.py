@@ -183,10 +183,12 @@ def adam(path, init, lr, lmda, epsilon):
 	prev = 0.0
 	while True:
 
+		temp_lr = lr/(1+0.5*i)
+
 		if t % 3438 == 0:
 			random.shuffle(data)
 			current = func(guess, data, lmda)
-			print(f"{i}:{current}:{compute_test_error(f, test_data, W, T)}", file=f)
+			print(f"{i}:{current}:{compute_test_error(f, test_data, W, T)}:{temp_lr}", file=f)
 			print(f"{i}:{current}:{compute_test_error(f, test_data, W, T)}")
 			if abs(current - prev) < 1e-3:
 				print("Convergence")
@@ -197,7 +199,6 @@ def adam(path, init, lr, lmda, epsilon):
 			i += 1
 		t += 1
 
-		temp_lr = lr/(1+0.5*i)
 
 		func_prime(guess, data[t%len(data)], lmda)
 

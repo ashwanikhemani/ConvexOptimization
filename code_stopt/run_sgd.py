@@ -332,10 +332,10 @@ def sgd_momentum(path, train_, test_, params, lr_, lmda_, tol_):
 	while True:
 		#now check if we have converged print and return if the case
 		current = func(guess, train_, W_, T_, lmda_)
+		error = compute_test_error(f, test_, W_, T_)
 
-		print(f"{i}:{current}", file=f)
-		print(f"{i}\t{current}")
-		compute_test_error(f, W_, T_)
+		print(f"{i}\t{current}\t{error}", file=f)
+		print(f"{i}\t{current}\t{error}")
 
 		if abs(current - prev) < tol_:
 			print("Convergence")
@@ -349,7 +349,7 @@ def sgd_momentum(path, train_, test_, params, lr_, lmda_, tol_):
 			np.multiply(beta, m, out=m)
 			np.multiply(1-beta, log_grad, out=log_grad)
 			np.add(m, log_grad, out=m)
-			np.sub(guess, np.multiply(lr, m), out=guess)
+			np.subtract(guess, np.multiply(lr, m), out=guess)
 
 		i += 1
 
@@ -454,4 +454,4 @@ def sgd_decay(path, train_, test_, params, lr_, lmda_, tol_):
 		i += 1
 
 
-sgd(path_output, train_data, test_data, param_guess, lr, lmda, tol)
+sgd_momentum(path_output, train_data, test_data, param_guess, lr, lmda, tol)
