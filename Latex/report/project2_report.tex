@@ -35,7 +35,9 @@ Optimization converged with status CONVERGED_GTTOL.
 
 \section*{Question P2}
 See figure 1 for the plot. Yes, using a larger value of $\lambda$
-will allow for faster convergence.
+will allow for faster convergence. As $\lambda$ increases, the upper bound
+on the largest eigenvalue will decrease. Smaller eigenvalues will lead
+to smaller updates over time, which will lead to faster convergence.
 
 \begin{figure}[b]
 \centering
@@ -84,12 +86,15 @@ significantly affected.
 See figures 4, 5, and 6 for the plots. We observe that when the $\lambda$ is 
 small, time to convergence increases. We also observe that sgd and adam converge
 faster than lbfgs, this is because sgd and adam dropped dramatically within
-the first couple of passes.
+the first couple of passes. We would like to mention that when we generated the
+graphs for this section, we did not set a tolerance but instead killed the optimizers
+manually for adam and sgd. This is why adam took so long to "converge" for the 
+first two $\lambda$'s.
 
 For the SGD optimizer, we used basic
 momentum and a decaying learning rate. We set a momentum parameter $\beta = 0.9$
 For $\lambda$ values of $1e-2, 1e-4, 1e-6$, we used a learning rate of $1e-2$ for
-all.
+all. The decay rate was $0.5$.
 
 
 For the adam optimizer, we used the 
