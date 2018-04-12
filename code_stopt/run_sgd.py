@@ -5,8 +5,9 @@ import sys
 path_train = sys.argv[1]
 path_test = sys.argv[2]
 path_output = sys.argv[3]
-lr = 1e-1
+lr = 1e-2 
 lmda = 1e-2
+tol = 1e-3
 
 
 from string import ascii_lowercase
@@ -216,7 +217,45 @@ def func_prime(params, *args):
 
 	return log_grad
 
-def sgd_momentum_decay(path, train_, test_, params, lr_, lmda_):
+def max_sum(X, W_, T_):
+#never called directly
+#decodes by running the max sum algorithm
+#X, W, T are numpy arrays (X is the input)
+	alpha_len = 26
+	trellis = np.zeros((X.shape[0],alpha_len))
+	interior = np.zeros(alpha_len)
+	y_star = np.zeros(X.shape[0], dtype=int)
+
+	for i in range(1, X.shape[0]):
+		for j in range(alpha_len):
+			for k in range(alpha_len):
+				interior[k] = np.dot(W_[k], X[i-1]) +\
+					T_[k, j] + trellis[i-1, k]
+			trellis[i, j] = np.max(interior)
+	
+	for i in range(alpha_len):
+		interior[i] = np.dot(W_[i], X[-1]) + trellis[-1, k]
+	y_star[-1] = np.argmax(interior)
+
+	for i in range(X.shape[0]-1, 0, -1):
+		for j in range(alpha_len):
+			interior[j] = np.dot(W_[j], X[i-1]) +\
+				T_[j, y_star[i]] + trellis[i-1, j]
+		y_star[i-1] = np.argmax(interior)
+
+	return y_star
+
+def compute_test_error(f, W_, T_):
+	letter_error, letter_count, word_error = 0.0, 0.0, 0.0
+	for example in test_data:
+		letter_count += len(example[1])
+		y_guess = max_sum(example[0], W_, T_)
+		s = np.sum(y_guess != example[1])
+		if not np.array_equal(y_guess, example[1]):
+			word_error += 1
+	return word_error/len(test_data)
+
+def sgd_momentum_decay(path, train_, test_, params, lr_, lmda_, tol_):
 #runs stochastic gradient descent on the function defined above
 #starting at the intial guess of the params provided as an argument
 #it also assumes the data you want to use is train_sgd, test_sgd
@@ -229,9 +268,6 @@ def sgd_momentum_decay(path, train_, test_, params, lr_, lmda_):
 
 	#variables for printing to file
 	i, f = 0, open(path+f"/sgd-{lr_}-{lmda_}.txt" , "w")
-
-	#tolerance
-	tol = 1e-3
 
 	#decay variable
 	decay = 0.5
@@ -251,10 +287,10 @@ def sgd_momentum_decay(path, train_, test_, params, lr_, lmda_):
 		#now check if we have converged print and return if the case
 		current = func(guess, train_, W_, T_, lmda_)
 
-		print(f"{i}:{current}:{temp_lr}", file=f)
+		print(f"{i}:ObjVal: {current} LR: {temp_lr} ", file=f)
 		print(f"{i}\t{current}\t{temp_lr}")
 
-		if abs(current - prev) < tol:
+		if abs(current - prev) < tol_:
 			print("Convergence")
 			return
 		else:
@@ -270,7 +306,7 @@ def sgd_momentum_decay(path, train_, test_, params, lr_, lmda_):
 
 		i += 1
 
-def sgd_momentum(path, train_, test_, params, lr_, lmda_):
+def sgd_momentum(path, train_, test_, params, lr_, lmda_, tol_):
 #runs stochastic gradient descent on the function defined above
 #starting at the intial guess of the params provided as an argument
 #it also assumes the data you want to use is train_sgd, test_sgd
@@ -283,9 +319,6 @@ def sgd_momentum(path, train_, test_, params, lr_, lmda_):
 
 	#variables for printing to file
 	i, f = 0, open(path+f"/sgd-{lr_}-{lmda_}.txt" , "w")
-
-	#tolerance
-	tol = 1e-3
 
 	#momentum variable
 	m = np.zeros(129*26+26*26, dtype=float)
@@ -301,8 +334,9 @@ def sgd_momentum(path, train_, test_, params, lr_, lmda_):
 
 		print(f"{i}:{current}", file=f)
 		print(f"{i}\t{current}")
+		compute_test_error(f, W_, T_)
 
-		if abs(current - prev) < tol:
+		if abs(current - prev) < tol_:
 			print("Convergence")
 			return
 		else:
@@ -312,13 +346,13 @@ def sgd_momentum(path, train_, test_, params, lr_, lmda_):
 
 			func_prime(guess, train_[j][0], train_[j][1],W_, T_, lmda_)
 			np.multiply(0.9, m, out=m)
-			np.multiply(lr, log_grad, out=log_grad)
+			np.multiply(lr_, log_grad, out=log_grad)
 			np.add(m, log_grad, out=m)
 			np.subtract(guess, m, out=guess)
 
 		i += 1
 
-def sgd(path, train_, test_, params, lr_, lmda_):
+def sgd(path, train_, test_, params, lr_, lmda_, tol_):
 #runs stochastic gradient descent on the function defined above
 #starting at the intial guess of the params provided as an argument
 #it also assumes the data you want to use is train_sgd, test_sgd
@@ -332,23 +366,22 @@ def sgd(path, train_, test_, params, lr_, lmda_):
 	#variables for printing to file
 	i, f = 0, open(path+f"/sgd-{lr_}-{lmda_}.txt" , "w")
 
-	#tolerance
-	tol = 1e-3
-
 	#Run descent forever
 	print(f"Starting SGD: lr:{lr_} lambda:{lmda_} tol:{tol}")
 	print(f"Starting SGD: lr:{lr_} lambda:{lmda_} tol:{tol}", file=f)
 
 	prev = 0.0
+	print("iter\tObjective\tWordErr")
+	print("iter\tObjective\tWordErr", file=f)
 	while True:
 
 		#now check if we have converged print and return if the case
 		current = func(guess, train_, W_, T_, lmda_)
 
-		print(f"{i}:{current}", file=f)
-		print(f"{i}\t{current}")
+		print(f"{i}\t{current}\t{compute_test_error(f, W_, T_)}", file=f)
+		print(f"{i}\t{current}\t{compute_test_error(f, W_, T_)}")
 
-		if abs(current - prev) < tol:
+		if abs(current - prev) < tol_:
 			print("Convergence")
 			return
 		else:
@@ -362,7 +395,7 @@ def sgd(path, train_, test_, params, lr_, lmda_):
 
 		i += 1
 
-def sgd_decay(path, train_, test_, params, lr_, lmda_):
+def sgd_decay(path, train_, test_, params, lr_, lmda_, tol_):
 #runs stochastic gradient descent on the function defined above
 #starting at the intial guess of the params provided as an argument
 #it also assumes the data you want to use is train_sgd, test_sgd
@@ -376,15 +409,15 @@ def sgd_decay(path, train_, test_, params, lr_, lmda_):
 	#variables for printing to file
 	i, f = 0, open(path+f"/sgd-{lr_}-{lmda_}.txt" , "w")
 
-	#tolerance
-	tol = 1e-3
-
 	#decay variable
 	decay = 0.5
 
 	#Run descent forever
 	print(f"Starting SGD with decay: lr:{lr_} lambda:{lmda_} tol:{tol}")
 	print(f"Starting SGD with decay: lr:{lr_} lambda:{lmda_} tol:{tol}", file=f)
+
+	print("iter\tlr\tObjective\tWordErr")
+	print("iter\tlr\tObjective\tWordErr", file=f)
 
 	prev = 0.0
 	while True:
@@ -395,10 +428,10 @@ def sgd_decay(path, train_, test_, params, lr_, lmda_):
 		#now check if we have converged print and return if the case
 		current = func(guess, train_, W_, T_, lmda_)
 
-		print(f"{i}:{current} {temp_lr}", file=f)
-		print(f"{i}\t{current} {temp_lr}")
+		print(f"{i}\t{temp_lr}\t{current}\t{compute_test_error(f, W_, T_)}", file=f)
+		print(f"{i}\t{temp_lr}\t{current}\t{compute_test_error(f, W_, T_)}")
 
-		if abs(current - prev) < tol:
+		if abs(current - prev) < tol_:
 			print("Convergence")
 			return
 		else:
@@ -413,4 +446,4 @@ def sgd_decay(path, train_, test_, params, lr_, lmda_):
 		i += 1
 
 
-sgd_momentum(path_output, train_data, test_data, param_guess, lr, lmda)
+sgd_decay(path_output, train_data, test_data, param_guess, lr, lmda, tol)
