@@ -149,6 +149,16 @@ def sgd(path, init, lr, lmda):
 
 		i += 1
 
+def compute_test_error(f, test_, W_, T_):
+
+	letter_error, letter_count, word_error = 0.0, 0.0, 0.0
+	for example in test_:
+		letter_count += len(example[1])
+		y_guess = max_sum(example[0], W_, T_)
+		if not np.array_equal(y_guess, example[1]):
+			word_error += 1
+	return word_error/len(test_)
+
 def adam(path, init, lr, lmda, epsilon):
 #runs adam optimizer, inspired by ashwani
 
@@ -174,8 +184,8 @@ def adam(path, init, lr, lmda, epsilon):
 
 		if t % 3438 == 0:
 			current = func(guess, data, lmda)
-			print(f"{i}:{current}")
-			print(f"{i}:{current}", file=f)
+			print(f"{i}:{current}:{compute_test_error(f, test_data, W, T)}", file=f)
+			print(f"{i}:{current}:{compute_test_error(f, test_data, W, T)}")
 			if abs(current - prev) < 1e-3:
 				print("Convergence")
 				return
@@ -206,7 +216,7 @@ def adam(path, init, lr, lmda, epsilon):
 		np.divide(m, v, out=m)
 		np.add(guess, m, out=guess)
 
-def sample(data, W, T, s):
+def sample(data, table, s):
 
 	#pick word from training set
 	X, y = random.choice(data)
@@ -218,17 +228,32 @@ def sample(data, W, T, s):
 	probs = np.zeros(26)
 	elements = np.arange(26)
 	for i in range(s):
+
 		indx = np.random.randint(0, high=y.shape[0])
 		for j in range(26):
 			y[indx] = j
-			probs[j] =  prob_grad.compute_log_p(X, y, W, T)
-		np.exp(probs, out=probs)
-		print(np.sum(probs))
-#		np.divide(probs, np.sum(probs), out=probs)
+			
+		print(probs)
 		y[indx] = np.random.choice(elements, 1, p=probs)
 
 	#now use this to compute gradient
 	return (X, y)
+
+def compute_freq(data):
+#position in the word matters here for the count
+
+	table_node = np.zeros((26, 14))
+	table_edge = np.zeros((26, 26))
+
+	for example in data:
+		table_node[example[1][0], 0] += 1
+		for i in range(1, len(example[1])):
+			table_node[example[1][i], i] += 1
+			table_edge[example[1][i-1], example[1][i]] += 1
+	
+	np.divide(table, np.sum(table, axis=0), out=table)
+	#compute row denom
+	return table
 
 def adam_mcmc(path, init, lr, lmda, epsilon, s):
 #runs adam optimizer, inspired by ashwani
@@ -237,6 +262,9 @@ def adam_mcmc(path, init, lr, lmda, epsilon, s):
 	data = read_data.read_train_sgd()
 	print("Reading Test Data...")
 	test_data = read_data.read_test_sgd()
+
+	print("Computing the frequencies")
+	table = compute_freq(data)
 
 	guess = np.copy(init)
 	W, T = guess[:26*129].reshape((26, 129)),\
@@ -255,8 +283,9 @@ def adam_mcmc(path, init, lr, lmda, epsilon, s):
 
 		if t % 30 == 0:
 			current = func(guess, data, lmda)
-			print(f"{i}:{current}")
-			print(f"{i}:{current}", file=f)
+			error = compute_test_error(f, test_data, W, T)
+			print(f"{i}:{current}:{error}", file=f)
+			print(f"{i}:{current}:{error}")
 			if abs(current - prev) < 1e-3:
 				print("Convergence")
 				return
@@ -268,7 +297,7 @@ def adam_mcmc(path, init, lr, lmda, epsilon, s):
 
 		temp_lr = lr/(1+0.5*i)
 
-		example = sample(data, W, T, s)
+		example = sample(data, table,  s)
 		func_prime(guess, example, lmda)
 
 		np.multiply(b1, m, out=m)
@@ -293,5 +322,6 @@ def adam_mcmc(path, init, lr, lmda, epsilon, s):
 
 	
 init = np.zeros((26*129+26*26), dtype=np.longdouble)
+adam("output/", init, 1e-1, 1e-4, 1e-8)
 #sgd(init, 1e-3, 1e-2)
-adam_mcmc("output", init, 1e-3, 1e-2, 1e-8, 14)
+#adam_mcmc("output", init, 1e-3, 1e-2, 1e-8, 14)
