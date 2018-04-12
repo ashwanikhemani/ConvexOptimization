@@ -174,6 +174,7 @@ def adam(path, init, lr, lmda, epsilon):
 	#adam parameters
 	t, b1, b2, = 0, 0.9, 0.999
 	m, v = np.zeros(26*129+26*26, dtype=np.longdouble), np.zeros(26*129+26*26, dtype=np.longdouble)
+	m_hat, v_hat = np.zeros(26*129+26*26), np.zeros(26*129+26*26)
 	i, f = 0, open(path+f"/adam-{lr}-{lmda}.txt", "w")
 
 	print(f"Running Adam: lr:{lr} lambda:{lmda} epsilon:{epsilon}")
@@ -183,6 +184,7 @@ def adam(path, init, lr, lmda, epsilon):
 	while True:
 
 		if t % 3438 == 0:
+			random.shuffle(data)
 			current = func(guess, data, lmda)
 			print(f"{i}:{current}:{compute_test_error(f, test_data, W, T)}", file=f)
 			print(f"{i}:{current}:{compute_test_error(f, test_data, W, T)}")
@@ -207,14 +209,15 @@ def adam(path, init, lr, lmda, epsilon):
 		np.multiply((1-b2), log_grad, out=log_grad)
 		np.add(v, log_grad, out=v)
 
-		np.divide(m, (1-np.power(b1, t)), out=m)
-		np.divide(v, (1-np.power(b2, t)), out=v)
 
-		np.multiply(-1*temp_lr, m, out=m)
-		np.sqrt(v, out=v)
-		np.add(v, epsilon, out=v)
-		np.divide(m, v, out=m)
-		np.add(guess, m, out=guess)
+		np.divide(m, (1-np.power(b1, t)), out=m_hat)
+		np.divide(v, (1-np.power(b2, t)), out=v_hat)
+
+		np.multiply(-1*temp_lr, m_hat,  out=m_hat)
+		np.sqrt(v_hat, out=v_hat)
+		np.add(v_hat, epsilon, out=v_hat)
+		np.divide(m_hat, v_hat, out=m_hat)
+		np.add(guess, m_hat, out=guess)
 
 def sample(data, table, s):
 
