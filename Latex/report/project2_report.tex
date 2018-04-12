@@ -80,4 +80,46 @@ and modify $loss\_coef$ to compute $g_{node}$ directly. This would allow us to
 forget about $C_{train}$ entirely. The computational performance will not be 
 significantly affected.
 
+\section*{Question S1}
+See figures 4, 5, and 6 for the plots. We observe that when the $\lambda$ is 
+small, time to convergence increases. We also observe that sgd and adam converge
+faster than lbfgs, this is because sgd and adam dropped dramatically within
+the first couple of passes.
+
+For the SGD optimizer, we used basic
+momentum and a decaying learning rate. We set a momentum parameter $\beta = 0.9$
+For $\lambda$ values of $1e-2, 1e-4, 1e-6$, we used a learning rate of $1e-2$ for
+all.
+
+
+For the adam optimizer, we used the 
+parameters $\beta_1 = 0.9, \beta_2 = 0.999$ for all three levels of $\lambda$ and 
+also we used a decay rate of $0.5$. For $\lambda$ values of $1e-2, 1e-4, 1e-6$ 
+we used a learning rate of $1e-2, 1e-1, 1$ respectively.
+
+\section*{Question S2}
+We started with the goals of achieving the fastest convergence so we tried to
+tune for larger learning rates without being so large that training would lead
+to instant divergence. This strategy worked well, but in the beginning we only
+tried a constant learning rate which lead to issues as we approached the minimum.
+We then switched to using a decaying learning rate and basic momentum for sgd, which
+worked better.
+
+\begin{figure}[b]
+\centering
+\includegraphics[scale=0.4]{objval_ef_1e2.png}
+\caption{Objective function vs Effective Number of Passes (lambda 1e-2)}
+\end{figure}
+
+\begin{figure}[b]
+\centering
+\includegraphics[scale=0.4]{objval_ef_1e4.png}
+\caption{Objective function vs Effective Number of Passes (lambda 1e-4)}
+\end{figure}
+
+\begin{figure}[b]
+\centering
+\includegraphics[scale=0.4]{objval_ef_1e6.png}
+\caption{Objective function vs Effective Number of Passes (lambda 1e-6)}
+\end{figure}
 \end{document}
