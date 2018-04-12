@@ -322,6 +322,7 @@ def sgd_momentum(path, train_, test_, params, lr_, lmda_, tol_):
 
 	#momentum variable
 	m = np.zeros(129*26+26*26, dtype=float)
+	beta = 0.9
 
 	#Run descent forever
 	print(f"Starting SGD with Momentum: lr:{lr_} lambda:{lmda_} tol:{tol}")
@@ -345,10 +346,10 @@ def sgd_momentum(path, train_, test_, params, lr_, lmda_, tol_):
 		for j in range(len(train_)):
 
 			func_prime(guess, train_[j][0], train_[j][1],W_, T_, lmda_)
-			np.multiply(0.9, m, out=m)
-			np.multiply(lr_, log_grad, out=log_grad)
+			np.multiply(beta, m, out=m)
+			np.multiply(1-beta, log_grad, out=log_grad)
 			np.add(m, log_grad, out=m)
-			np.subtract(guess, m, out=guess)
+			np.sub(guess, np.multiply(lr, m), out=guess)
 
 		i += 1
 
